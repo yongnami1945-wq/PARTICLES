@@ -1,0 +1,46 @@
+@import "tailwindcss";
+
+@layer base {
+  body {
+    background-color: #0a0a0b;
+    color: #e0e0e0;
+    font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono", "Courier New", monospace;
+    overflow: hidden;
+  }
+}
+
+/* Artistic Flair Technical HUD Grid & Scrollbar */
+.hud-grid-bg {
+  background-image: radial-gradient(#2a2a2e 1px, transparent 1px);
+  background-size: 20px 20px;
+}
+
+.custom-scrollbar::-webkit-scrollbar {
+  width: 5px;
+  height: 5px;
+}
+
+.custom-scrollbar::-webkit-scrollbar-track {
+  background: #0f0f12;
+  border-left: 1px solid #2a2a2e;
+}
+
+.custom-scrollbar::-webkit-scrollbar-thumb {
+  background: #2a2a2e;
+  border-radius: 0px;
+}
+
+.custom-scrollbar::-webkit-scrollbar-thumb:hover {
+  background: #00f0ff;
+  box-shadow: 0 0 8px rgba(0, 240, 255, 0.6);
+}
+
+/* Custom Cyberpunk Sliders */
+input[type="range"] {
+  accent-color: #00f0ff;
+}
+
+input[type="range"]::-webkit-slider-thumb {
+  box-shadow: 0 0 10px #00f0ff;
+}
+

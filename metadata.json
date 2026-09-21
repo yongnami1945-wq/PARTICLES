@@ -1,0 +1,6 @@
+{
+  "name": "Particle Morphing Studio",
+  "description": "High-performance real-time 3D particle morphing simulator with instant WebGL GPU preview, particles.js / tsParticles online preset auto-importer, Python NumPy/Open3D simulation scripts, image-to-particle conversion, and standalone HTML export.",
+  "requestFramePermissions": [],
+  "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
+}
