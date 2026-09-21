@@ -2,9 +2,10 @@ import React from 'react';
 import { 
   Play, Pause, RotateCcw, Download, Code2, Globe,
   BookOpen, Cpu, Sparkles, Image as ImageIcon, Zap, Waves, Camera, FileCode2,
-  Layers, HardDrive, Activity
+  Layers, HardDrive, Activity, Palette
 } from 'lucide-react';
 import { MorphConfig, PerformanceStats } from '../types';
+import { isLightBackgroundColor, isTransparentBackground } from './ParticleCanvas';
 
 interface HeaderProps {
   config: MorphConfig;
@@ -233,6 +234,40 @@ export const Header: React.FC<HeaderProps> = ({
         >
           <BookOpen className="w-3.5 h-3.5" />
           <span className="font-bold">사용설명서 (16P)</span>
+        </button>
+
+        {/* Background Contrast Mode Quick Switcher (Transparent -> White -> Dark) */}
+        <button
+          onClick={() => {
+            const isTrans = isTransparentBackground(config.backgroundColor);
+            const isLight = isLightBackgroundColor(config.backgroundColor);
+            if (isTrans) {
+              onChangeConfig({ backgroundColor: '#FFFFFF' });
+            } else if (isLight) {
+              onChangeConfig({ backgroundColor: '#030712' });
+            } else {
+              onChangeConfig({ backgroundColor: 'transparent' });
+            }
+          }}
+          className={`flex items-center gap-1.5 px-2.5 sm:px-3 py-1.5 border text-xs font-mono uppercase transition cursor-pointer font-bold ${
+            isTransparentBackground(config.backgroundColor)
+              ? 'bg-[#00F0FF] text-black border-[#00F0FF] shadow-[0_0_12px_rgba(0,240,255,0.6)]'
+              : isLightBackgroundColor(config.backgroundColor)
+              ? 'bg-amber-300 text-black border-amber-300 shadow-[0_0_12px_rgba(251,191,36,0.6)]'
+              : 'bg-[#1A1A1E] text-gray-300 border-[#2A2A2E] hover:border-[#00F0FF] hover:text-[#00F0FF]'
+          }`}
+          title="캔버스 배경 순환 전환: 색상 없음(투명) ↔ 고대비 화이트 ↔ 딥 다크"
+        >
+          <Palette className={`w-3.5 h-3.5 ${
+            isTransparentBackground(config.backgroundColor) || isLightBackgroundColor(config.backgroundColor) ? 'text-black' : 'text-[#00F0FF]'
+          }`} />
+          <span className="hidden xl:inline">
+            {isTransparentBackground(config.backgroundColor)
+              ? '🏁 색상 없음'
+              : isLightBackgroundColor(config.backgroundColor)
+              ? '☀️ 화이트'
+              : '🌌 다크'}
+          </span>
         </button>
 
         {/* 3D Viewport Snapshot Capture Button */}

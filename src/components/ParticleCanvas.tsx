@@ -5,7 +5,7 @@ import { EffectComposer } from 'three/examples/jsm/postprocessing/EffectComposer
 import { RenderPass } from 'three/examples/jsm/postprocessing/RenderPass.js';
 import { UnrealBloomPass } from 'three/examples/jsm/postprocessing/UnrealBloomPass.js';
 import { OutputPass } from 'three/examples/jsm/postprocessing/OutputPass.js';
-import { Camera, CheckCircle2, Sparkles, Music, Waves, Radio, Wind, Video, Grid, Sun } from 'lucide-react';
+import { Camera, CheckCircle2, Sparkles, Music, Waves, Radio, Wind, Video, Grid, Sun, Palette } from 'lucide-react';
 import { MorphConfig, MorphShape, PerformanceStats, MorphEasing } from '../types';
 import { particleVertexShader, particleFragmentShader } from '../utils/shaders';
 import { WasmParticleEngine } from '../utils/wasmEngine';
@@ -15,6 +15,33 @@ import { PhysicsFieldVisualizer, PhysicsDebugMetrics } from '../utils/physicsFie
 import { PhysicsDebugOverlay } from './PhysicsDebugOverlay';
 import { CoordinateGridVisualizer } from '../utils/coordinateGridOverlay';
 import { CoordinateGridOverlay } from './CoordinateGridOverlay';
+
+export function isTransparentBackground(color?: string): boolean {
+  if (!color) return false;
+  const clean = color.trim().toLowerCase();
+  return clean === 'transparent' || clean === 'none' || clean === '' || clean === 'rgba(0,0,0,0)' || clean === 'rgba(0, 0, 0, 0)';
+}
+
+export function isLightBackgroundColor(hexOrRgb?: string): boolean {
+  if (!hexOrRgb) return false;
+  const clean = hexOrRgb.trim().toLowerCase();
+  if (isTransparentBackground(clean)) return true;
+  if (clean === 'white' || clean === '#fff' || clean === '#ffffff') return true;
+  if (clean.startsWith('#')) {
+    let hex = clean.slice(1);
+    if (hex.length === 3) {
+      hex = hex.split('').map((c) => c + c).join('');
+    }
+    if (hex.length === 6) {
+      const r = parseInt(hex.substring(0, 2), 16) / 255;
+      const g = parseInt(hex.substring(2, 4), 16) / 255;
+      const b = parseInt(hex.substring(4, 6), 16) / 255;
+      const lum = 0.2126 * r + 0.7152 * g + 0.0722 * b;
+      return lum > 0.45;
+    }
+  }
+  return false;
+}
 
 export function applyMorphEasing(t: number, easing: MorphEasing = 'ease-in-out'): number {
   const clamped = Math.max(0, Math.min(1, t));
@@ -100,6 +127,7 @@ export const ParticleCanvas = forwardRef<ParticleCanvasHandle, ParticleCanvasPro
   const composerRef = useRef<EffectComposer | null>(null);
   const bloomPassRef = useRef<UnrealBloomPass | null>(null);
   const renderPassRef = useRef<RenderPass | null>(null);
+  const gridHelperRef = useRef<THREE.GridHelper | null>(null);
 
   const [isFlashing, setIsFlashing] = useState(false);
   const [snapshotToast, setSnapshotToast] = useState<string | null>(null);
@@ -190,8 +218,17 @@ export const ParticleCanvas = forwardRef<ParticleCanvasHandle, ParticleCanvasPro
     if (!container) return;
 
     // Scene
+    const isInitialTransparent = isTransparentBackground(config.backgroundColor);
+    const isInitialLight = isLightBackgroundColor(config.backgroundColor);
+    const initialBgHex = isInitialTransparent
+      ? '#000000'
+      : config.backgroundColor || (isInitialLight ? '#FFFFFF' : '#030712');
+    const initialBgCol = new THREE.Color(initialBgHex);
+
     const scene = new THREE.Scene();
-    scene.fog = new THREE.FogExp2(0x0a0a0b, 0.015);
+    if (!isInitialTransparent) {
+      scene.fog = new THREE.FogExp2(initialBgHex, isInitialLight ? 0.003 : 0.015);
+    }
     sceneRef.current = scene;
 
     // Camera
@@ -213,7 +250,11 @@ export const ParticleCanvas = forwardRef<ParticleCanvasHandle, ParticleCanvasPro
     });
     renderer.setSize(container.clientWidth, container.clientHeight);
     renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
-    renderer.setClearColor(0x0a0a0b, 1);
+    if (isInitialTransparent) {
+      renderer.setClearColor(0x000000, 0);
+    } else {
+      renderer.setClearColor(initialBgCol, 1);
+    }
     renderer.autoClear = true;
     container.innerHTML = '';
     container.appendChild(renderer.domElement);
@@ -223,7 +264,7 @@ export const ParticleCanvas = forwardRef<ParticleCanvasHandle, ParticleCanvasPro
     const fadeScene = new THREE.Scene();
     const fadeCamera = new THREE.OrthographicCamera(-1, 1, 1, -1, 0, 1);
     const fadeMaterial = new THREE.MeshBasicMaterial({
-      color: 0x0a0a0b,
+      color: initialBgCol,
       transparent: true,
       opacity: 0.15,
       depthTest: false,
@@ -240,10 +281,12 @@ export const ParticleCanvas = forwardRef<ParticleCanvasHandle, ParticleCanvasPro
     controls.minDistance = 2;
     controlsRef.current = controls;
 
-    // Background Subtle Starfield / Grid Plane
+    // Background Subtle Starfield / Grid Plane (hidden on transparent / light backgrounds)
     const gridHelper = new THREE.GridHelper(30, 30, 0x2a2a2e, 0x141417);
     gridHelper.position.y = -6.5;
+    gridHelper.visible = !isInitialTransparent && !isInitialLight;
     scene.add(gridHelper);
+    gridHelperRef.current = gridHelper;
 
     // 3D Precision Coordinate Alignment Grid Visualizer
     const gridVisualizer = new CoordinateGridVisualizer();
@@ -710,11 +753,44 @@ export const ParticleCanvas = forwardRef<ParticleCanvasHandle, ParticleCanvasPro
         // Dynamic Motion Blur Intensity Uniform
         curMaterial.uniforms.uMotionBlurIntensity.value = curConfig.motionBlurIntensity ?? 1.0;
 
-        // Dynamic Background Color Sync
-        if (curConfig.backgroundColor) {
+        // Dynamic Background Color Sync & High-Contrast Light / Transparent Mode Adaptation
+        const isTransparent = isTransparentBackground(curConfig.backgroundColor);
+        const isLight = isLightBackgroundColor(curConfig.backgroundColor);
+
+        if (curMaterial.uniforms.uIsLightBackground) {
+          curMaterial.uniforms.uIsLightBackground.value = (isLight || isTransparent) ? 1.0 : 0.0;
+        }
+
+        const isSnowflake = curConfig.particleType && curConfig.particleType.startsWith('snowflake');
+        const targetBlending = (isLight || isTransparent)
+          ? THREE.NormalBlending
+          : curConfig.snowflakeCustomBlending && isSnowflake ? THREE.AdditiveBlending :
+            curConfig.blending === 'screen' ? THREE.CustomBlending :
+            curConfig.blending === 'normal' ? THREE.NormalBlending : THREE.AdditiveBlending;
+
+        if (curMaterial.blending !== targetBlending) {
+          curMaterial.blending = targetBlending;
+          curMaterial.needsUpdate = true;
+        }
+
+        if (gridHelperRef.current) {
+          gridHelperRef.current.visible = !isTransparent && !isLight;
+        }
+
+        if (isTransparent) {
+          renderer.setClearColor(0x000000, 0);
+          if (scene.fog) {
+            scene.fog = null;
+          }
+        } else if (curConfig.backgroundColor) {
           const bgCol = new THREE.Color(curConfig.backgroundColor);
           renderer.setClearColor(bgCol, 1);
-          if (scene.fog) scene.fog.color.copy(bgCol);
+          if (!scene.fog) {
+            scene.fog = new THREE.FogExp2(bgCol, isLight ? 0.003 : 0.015);
+          } else {
+            scene.fog.color.copy(bgCol);
+            (scene.fog as THREE.FogExp2).density = isLight ? 0.003 : 0.015;
+          }
           fadeMaterial.color.copy(bgCol);
         }
       }
@@ -746,10 +822,13 @@ export const ParticleCanvas = forwardRef<ParticleCanvasHandle, ParticleCanvasPro
         }
       }
 
-      // Render with Bloom Post-Processing or Motion Blur Trails / Standard Clear
-      const isBloomActive = curConfig.bloomEnabled !== false;
-      const blurIntensity = curConfig.motionBlurIntensity ?? 1.0;
-      const isTrailsActive = curConfig.trailsEnabled || blurIntensity > 0.05;
+      // Render with Bloom Post-Processing or Motion Blur Trails / Standard Clean Clear
+      // Note: On white/light or transparent canvas, bloom and trails are bypassed to guarantee
+      // crisp THREE.NormalBlending without ghost washout or dark accumulation!
+      const isTransparent = isTransparentBackground(curConfig.backgroundColor);
+      const isLight = isLightBackgroundColor(curConfig.backgroundColor);
+      const isBloomActive = curConfig.bloomEnabled !== false && !isLight && !isTransparent;
+      const isTrailsActive = Boolean(curConfig.trailsEnabled) && !isLight && !isTransparent;
 
       if (isBloomActive && composerRef.current && bloomPassRef.current) {
         // Sync dynamic bloom parameters & ACES Filmic tone mapping
@@ -761,6 +840,7 @@ export const ParticleCanvas = forwardRef<ParticleCanvasHandle, ParticleCanvasPro
 
         if (isTrailsActive) {
           renderer.autoClearColor = false;
+          const blurIntensity = curConfig.motionBlurIntensity ?? 1.0;
           const baseTrailLen = Math.max(0.10, Math.min(0.98, curConfig.trailLength ?? 0.85));
           const scaledPersistence = Math.max(0.05, Math.min(0.988, 1.0 - (1.0 - baseTrailLen) / Math.max(0.15, blurIntensity)));
           const fadeAlpha = Math.max(0.012, Math.min(0.95, (1.0 - scaledPersistence) * (1.0 / Math.max(0.3, Math.sqrt(blurIntensity)))));
@@ -774,7 +854,7 @@ export const ParticleCanvas = forwardRef<ParticleCanvasHandle, ParticleCanvasPro
         renderer.toneMapping = THREE.NoToneMapping;
         renderer.autoClearColor = false;
         
-        // Base persistence factor (0.10 ~ 0.98)
+        const blurIntensity = curConfig.motionBlurIntensity ?? 1.0;
         const baseTrailLen = Math.max(0.10, Math.min(0.98, curConfig.trailLength ?? 0.85));
         const scaledPersistence = Math.max(0.05, Math.min(0.988, 1.0 - (1.0 - baseTrailLen) / Math.max(0.15, blurIntensity)));
         const fadeAlpha = Math.max(0.012, Math.min(0.95, (1.0 - scaledPersistence) * (1.0 / Math.max(0.3, Math.sqrt(blurIntensity)))));
@@ -782,15 +862,17 @@ export const ParticleCanvas = forwardRef<ParticleCanvasHandle, ParticleCanvasPro
 
         // Render full screen fade quad over preserved buffer to dim old particle positions
         renderer.render(fadeScene, fadeCamera);
-
-        // Clear depth so new 3D particle positions test and write correctly
         renderer.clearDepth();
 
         // Render particle system on top, leaving a luminous decaying ghost path
         renderer.render(scene, camera);
       } else {
+        // Standard clean render - clears color & depth completely every frame
+        // This guarantees THREE.NormalBlending composites razor-sharp with no canvas color artifacts!
         renderer.toneMapping = THREE.NoToneMapping;
+        renderer.autoClear = true;
         renderer.autoClearColor = true;
+        renderer.autoClearDepth = true;
         renderer.render(scene, camera);
       }
     };
@@ -901,11 +983,14 @@ export const ParticleCanvas = forwardRef<ParticleCanvasHandle, ParticleCanvasPro
     const tex5 = createSnowflakeCanvasTexture(5);
 
     // Shader Material
+    const isTransBg = isTransparentBackground(config.backgroundColor);
+    const isLightBg = isLightBackgroundColor(config.backgroundColor);
     const isSnowflake = config.particleType && config.particleType.startsWith('snowflake');
-    const blendingMode =
-      config.snowflakeCustomBlending && isSnowflake ? THREE.AdditiveBlending :
-      config.blending === 'screen' ? THREE.CustomBlending :
-      config.blending === 'normal' ? THREE.NormalBlending : THREE.AdditiveBlending;
+    const blendingMode = (isLightBg || isTransBg)
+      ? THREE.NormalBlending
+      : config.snowflakeCustomBlending && isSnowflake ? THREE.AdditiveBlending :
+        config.blending === 'screen' ? THREE.CustomBlending :
+        config.blending === 'normal' ? THREE.NormalBlending : THREE.AdditiveBlending;
 
     const initColA = new THREE.Color(config.colorA || '#00F0FF');
     const initColB = new THREE.Color(config.colorB || '#FF007F');
@@ -933,6 +1018,7 @@ export const ParticleCanvas = forwardRef<ParticleCanvasHandle, ParticleCanvasPro
         uVelocityShift: { value: config.velocityColorShift ?? 1.0 },
         uColorGamma: { value: config.colorGamma ?? 1.0 },
         uGlowIntensity: { value: config.glowIntensity },
+        uIsLightBackground: { value: (isLightBg || isTransBg) ? 1.0 : 0.0 },
         uParticleType: { value: 0 },
         uShapeRotation: { value: 0 },
         uCoreRatio: { value: config.coreRatio ?? 0.8 },
@@ -990,10 +1076,24 @@ export const ParticleCanvas = forwardRef<ParticleCanvasHandle, ParticleCanvasPro
 
   const chain = morphChain && morphChain.length >= 2 ? morphChain : [sourceShape, targetShape];
 
+  const isTransparent = isTransparentBackground(config.backgroundColor);
+  const isLight = isLightBackgroundColor(config.backgroundColor);
+
   return (
-    <div className="relative w-full h-full overflow-hidden bg-[#0A0A0B] font-mono">
-      {/* Background Radial Dot Grid */}
-      <div className="absolute inset-0 pointer-events-none opacity-20 hud-grid-bg" />
+    <div
+      className={`relative w-full h-full overflow-hidden font-mono transition-colors duration-300 ${
+        isTransparent ? 'canvas-transparent-bg' : ''
+      }`}
+      style={{
+        backgroundColor: isTransparent
+          ? 'transparent'
+          : config.backgroundColor || (isLight ? '#FFFFFF' : '#030712'),
+      }}
+    >
+      {/* Background Radial Dot Grid (Only shown in dark mode) */}
+      {!isTransparent && !isLight && (
+        <div className="absolute inset-0 pointer-events-none opacity-20 hud-grid-bg" />
+      )}
 
       {/* Viewport Corner HUD Technical Markers */}
       <div className="absolute top-3 left-4 z-20 pointer-events-none text-[10px] text-gray-500 tracking-widest uppercase">
@@ -1083,7 +1183,42 @@ export const ParticleCanvas = forwardRef<ParticleCanvasHandle, ParticleCanvasPro
       )}
 
       {/* Floating Canvas Quick Controls (Bottom-Left) */}
-      <div className="absolute bottom-4 left-4 z-20 flex items-center gap-2 bg-[#0F0F12] border border-[#2A2A2E] px-2.5 py-1.5 text-xs text-[#E0E0E0]">
+      <div className="absolute bottom-4 left-4 z-20 flex items-center gap-1.5 bg-[#0F0F12]/90 backdrop-blur-md border border-[#2A2A2E] px-2.5 py-1.5 text-xs text-[#E0E0E0] shadow-xl">
+        {/* Background Contrast Mode Quick Switcher: 3 Modes */}
+        <button
+          onClick={() => onChangeConfig({ backgroundColor: 'transparent' })}
+          className={`px-2 py-1 text-[10px] font-mono uppercase transition border cursor-pointer flex items-center gap-1 font-bold ${
+            isTransparent
+              ? 'bg-[#00F0FF] text-black border-[#00F0FF] shadow-[0_0_10px_rgba(0,240,255,0.5)]'
+              : 'bg-[#1A1A1E] text-gray-300 border-[#2A2A2E] hover:text-[#00F0FF]'
+          }`}
+          title="캔버스 색상 없음 (투명): 배경색을 완전히 제거하고 파티클만 투명하게 렌더링"
+        >
+          <span>🏁 색상 없음 (투명)</span>
+        </button>
+        <button
+          onClick={() => onChangeConfig({ backgroundColor: '#FFFFFF' })}
+          className={`px-2 py-1 text-[10px] font-mono uppercase transition border cursor-pointer flex items-center gap-1 font-bold ${
+            !isTransparent && isLight
+              ? 'bg-amber-300 text-black border-amber-300 shadow-[0_0_10px_rgba(251,191,36,0.6)]'
+              : 'bg-[#1A1A1E] text-gray-300 border-[#2A2A2E] hover:border-amber-300'
+          }`}
+          title="백색 배경 모드: 잉크 고대비 셰이더 및 노멀 블렌딩 자동 적용"
+        >
+          <span>☀️ 화이트</span>
+        </button>
+        <button
+          onClick={() => onChangeConfig({ backgroundColor: '#030712' })}
+          className={`px-2 py-1 text-[10px] font-mono uppercase transition border cursor-pointer flex items-center gap-1 font-bold ${
+            !isTransparent && !isLight
+              ? 'bg-[#030712] text-[#00F0FF] border-[#00F0FF] shadow-[0_0_10px_rgba(0,240,255,0.3)]'
+              : 'bg-[#1A1A1E] text-gray-400 border-[#2A2A2E] hover:text-white'
+          }`}
+          title="다크 네온 모드: 딥 스페이스 배경 및 발광 블렌딩 적용"
+        >
+          <span>🌌 다크</span>
+        </button>
+        <div className="h-3.5 w-px bg-[#2A2A2E]" />
         <button
           onClick={handleResetCamera}
           className="px-2 py-1 bg-[#1A1A1E] hover:border-[#00F0FF] border border-[#2A2A2E] text-gray-300 hover:text-white transition font-mono uppercase text-[10px] cursor-pointer"

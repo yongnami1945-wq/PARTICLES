@@ -11,6 +11,7 @@ import { PresetLibraryTab } from './PresetLibraryTab';
 import { audioEngine } from '../utils/audioEngine';
 import { exportPointCloudPLY, exportPointCloudOBJ, exportPointCloudXYZ, exportPointCloudCSV } from '../utils/pointCloudExporter';
 import { VisualTimelineEditor, EASING_OPTIONS } from './VisualTimelineEditor';
+import { isTransparentBackground, isLightBackgroundColor } from './ParticleCanvas';
 
 interface ControlPanelProps {
   config: MorphConfig;
@@ -1667,13 +1668,82 @@ export const ControlPanel: React.FC<ControlPanelProps> = ({
                   08. 캔버스 배경색 (BACKGROUND COLOR)
                 </h3>
                 <span className="text-[9px] font-mono text-[#00F0FF]">
-                  {config.backgroundColor || '#030712'}
+                  {isTransparentBackground(config.backgroundColor)
+                    ? '투명 (색상 없음)'
+                    : config.backgroundColor || '#030712'}
                 </span>
               </div>
               <p className="text-[9px] text-gray-400">
-                다운로드되는 HTML 파일 및 3D 뷰포트의 배경색을 지정합니다.
+                다운로드되는 HTML 파일 및 3D 뷰포트의 배경색을 지정합니다. 백색 또는 투명 배경 선택 시 파티클 움직임이 뚜렷하게 보이도록 고대비 잉크 셰이더와 THREE.NormalBlending이 자동 적용됩니다.
               </p>
+
+              {/* One-click Transparent / White / Dark Quick Toggles */}
+              <div className="grid grid-cols-3 gap-1.5">
+                <button
+                  type="button"
+                  onClick={() => onChangeConfig({ backgroundColor: 'transparent' })}
+                  className={`py-1.5 px-1 border text-[10px] font-bold flex items-center justify-center gap-1 transition cursor-pointer ${
+                    isTransparentBackground(config.backgroundColor)
+                      ? 'bg-[#00F0FF] text-black border-[#00F0FF] shadow-[0_0_12px_rgba(0,240,255,0.6)]'
+                      : 'bg-[#1A1A1E] text-gray-300 border-[#2A2A2E] hover:border-[#00F0FF] hover:text-[#00F0FF]'
+                  }`}
+                  title="캔버스 색상 없음 (투명)"
+                >
+                  <span>🏁 색상 없음 (투명)</span>
+                </button>
+                <button
+                  type="button"
+                  onClick={() => onChangeConfig({ backgroundColor: '#FFFFFF' })}
+                  className={`py-1.5 px-1 border text-[10px] font-bold flex items-center justify-center gap-1 transition cursor-pointer ${
+                    !isTransparentBackground(config.backgroundColor) && isLightBackgroundColor(config.backgroundColor)
+                      ? 'bg-amber-300 text-black border-amber-300 shadow-[0_0_12px_rgba(251,191,36,0.6)]'
+                      : 'bg-[#1A1A1E] text-gray-300 border-[#2A2A2E] hover:border-amber-300 hover:text-white'
+                  }`}
+                  title="고대비 화이트 배경"
+                >
+                  <span>☀️ 화이트</span>
+                </button>
+                <button
+                  type="button"
+                  onClick={() => onChangeConfig({ backgroundColor: '#030712' })}
+                  className={`py-1.5 px-1 border text-[10px] font-bold flex items-center justify-center gap-1 transition cursor-pointer ${
+                    !isTransparentBackground(config.backgroundColor) && !isLightBackgroundColor(config.backgroundColor)
+                      ? 'bg-[#030712] text-[#00F0FF] border-[#00F0FF] shadow-[0_0_10px_rgba(0,240,255,0.3)]'
+                      : 'bg-[#1A1A1E] text-gray-400 border-[#2A2A2E] hover:text-white'
+                  }`}
+                  title="딥 스페이스 다크 배경"
+                >
+                  <span>🌌 다크</span>
+                </button>
+              </div>
+
+              {isTransparentBackground(config.backgroundColor) ? (
+                <div className="p-2 bg-[#00F0FF]/10 border border-[#00F0FF]/40 text-[9px] text-[#00F0FF] flex items-center gap-1.5">
+                  <span className="font-bold">✨ 색상 없음(투명) 모드 활성화:</span>
+                  <span>배경색이 완전히 제거되어 파티클만 투명하게 렌더링되며 노멀 블렌딩이 적용됩니다.</span>
+                </div>
+              ) : isLightBackgroundColor(config.backgroundColor) ? (
+                <div className="p-2 bg-amber-500/10 border border-amber-400/30 text-[9px] text-amber-200 flex items-center gap-1.5">
+                  <span className="font-bold">✨ 백색 배경 모드 활성화:</span>
+                  <span>노멀 블렌딩 & 윤곽선 고대비 보정으로 파티클 움직임이 선명하게 표현됩니다.</span>
+                </div>
+              ) : null}
+
               <div className="flex items-center gap-1.5 flex-wrap">
+                {/* Transparent Swatch Button */}
+                <button
+                  type="button"
+                  onClick={() => onChangeConfig({ backgroundColor: 'transparent' })}
+                  className={`w-7 h-7 rounded border transition cursor-pointer canvas-transparent-bg flex items-center justify-center ${
+                    isTransparentBackground(config.backgroundColor)
+                      ? 'border-[#00F0FF] scale-110 shadow-[0_0_10px_#00F0FF]'
+                      : 'border-[#2A2A2E] hover:border-gray-400'
+                  }`}
+                  title="색상 없음 (투명)"
+                >
+                  <span className="text-[10px] font-bold text-gray-800 bg-white/70 px-0.5 rounded">∅</span>
+                </button>
+
                 {[
                   { color: '#030712', label: '딥 스페이스' },
                   { color: '#000000', label: '순수 블랙' },
@@ -1688,6 +1758,7 @@ export const ControlPanel: React.FC<ControlPanelProps> = ({
                     type="button"
                     onClick={() => onChangeConfig({ backgroundColor: item.color })}
                     className={`w-7 h-7 rounded border transition cursor-pointer ${
+                      !isTransparentBackground(config.backgroundColor) &&
                       (config.backgroundColor || '#030712').toLowerCase() === item.color.toLowerCase()
                         ? 'border-[#00F0FF] scale-110 shadow-[0_0_10px_#00F0FF]'
                         : 'border-[#2A2A2E] hover:border-gray-400'
@@ -1699,7 +1770,7 @@ export const ControlPanel: React.FC<ControlPanelProps> = ({
                 <div className="flex items-center gap-1.5 ml-auto">
                   <input
                     type="color"
-                    value={config.backgroundColor || '#030712'}
+                    value={isTransparentBackground(config.backgroundColor) ? '#000000' : (config.backgroundColor || '#030712')}
                     onChange={(e) => onChangeConfig({ backgroundColor: e.target.value })}
                     className="w-7 h-7 rounded bg-transparent cursor-pointer border border-[#2A2A2E]"
                     title="직접 색상 선택"

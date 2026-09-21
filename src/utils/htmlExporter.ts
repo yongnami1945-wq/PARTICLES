@@ -1,5 +1,6 @@
 import { MorphConfig, MorphShape } from '../types';
 import { particleVertexShader, particleFragmentShader } from './shaders';
+import { isLightBackgroundColor, isTransparentBackground } from '../components/ParticleCanvas';
 
 /**
  * Helper to serialize Float32Array to Base64
@@ -625,17 +626,45 @@ ${metaJson}
     }
     renderStageNodes(0, false);
 
+    function isTransparentColor(val) {
+      if (!val) return false;
+      const clean = String(val).trim().toLowerCase();
+      return clean === 'transparent' || clean === 'rgba(0,0,0,0)' || clean === 'none';
+    }
+
+    function isLightColor(hex) {
+      if (!hex) return false;
+      const clean = hex.trim().toLowerCase();
+      if (clean === 'white' || clean === '#fff' || clean === '#ffffff') return true;
+      if (clean.startsWith('#')) {
+        let h = clean.slice(1);
+        if (h.length === 3) h = h.split('').map(c => c + c).join('');
+        if (h.length === 6) {
+          const r = parseInt(h.substring(0, 2), 16) / 255;
+          const g = parseInt(h.substring(2, 4), 16) / 255;
+          const b = parseInt(h.substring(4, 6), 16) / 255;
+          return (0.2126 * r + 0.7152 * g + 0.0722 * b) > 0.55;
+        }
+      }
+      return false;
+    }
+
     // --- Scene Setup ---
     const container = document.getElementById('canvas-container');
     const scene = new THREE.Scene();
     const camera = new THREE.PerspectiveCamera(60, window.innerWidth / window.innerHeight, 0.1, 1000);
     camera.position.set(0, 0, 15);
 
-    const bgThreeCol = new THREE.Color(currentBgColor);
+    const isInitialTrans = isTransparentColor(currentBgColor);
+    const bgThreeCol = new THREE.Color(isInitialTrans ? 0x000000 : currentBgColor);
     const renderer = new THREE.WebGLRenderer({ antialias: true, alpha: true, preserveDrawingBuffer: true });
     renderer.setSize(window.innerWidth, window.innerHeight);
     renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
-    renderer.setClearColor(bgThreeCol, 1);
+    if (isInitialTrans) {
+      renderer.setClearColor(0x000000, 0);
+    } else {
+      renderer.setClearColor(bgThreeCol, 1);
+    }
     renderer.autoClear = true;
     container.appendChild(renderer.domElement);
 
@@ -692,6 +721,7 @@ ${metaJson}
       uVelocityShift: { value: ${config.velocityColorShift ?? 1.0} },
       uColorGamma: { value: ${config.colorGamma ?? 1.0} },
       uGlowIntensity: { value: ${config.glowIntensity} },
+      uIsLightBackground: { value: isLightColor(currentBgColor) ? 1.0 : 0.0 },
       uParticleType: { value: ${particleTypeInt} },
       uShapeRotation: { value: ${((config.shapeRotation || 0) * Math.PI) / 180} },
       uCoreRatio: { value: ${config.coreRatio ?? 0.8} }
@@ -703,7 +733,7 @@ ${metaJson}
       uniforms: uniforms,
       transparent: true,
       depthWrite: false,
-      blending: THREE.AdditiveBlending
+      blending: isLightColor(currentBgColor) ? THREE.NormalBlending : THREE.AdditiveBlending
     });
 
     const particles = new THREE.Points(geometry, material);
@@ -745,17 +775,37 @@ ${metaJson}
     // --- Background Color Handler ---
     window.changeCanvasBg = function(hex, btnEl) {
       currentBgColor = hex;
-      document.documentElement.style.setProperty('--bg-color', hex);
-      document.body.style.backgroundColor = hex;
+      const isTrans = isTransparentColor(hex);
+      const isLight = isLightColor(hex);
+
+      document.documentElement.style.setProperty('--bg-color', isTrans ? 'transparent' : hex);
+      document.body.style.backgroundColor = isTrans ? 'transparent' : hex;
       
-      const c = new THREE.Color(hex);
-      renderer.setClearColor(c, 1);
-      fadeMaterial.color.copy(c);
+      if (uniforms.uIsLightBackground) {
+        uniforms.uIsLightBackground.value = (isLight || isTrans) ? 1.0 : 0.0;
+      }
+      material.blending = (isLight || isTrans) ? THREE.NormalBlending : THREE.AdditiveBlending;
+      material.needsUpdate = true;
+
+      if (isTrans) {
+        renderer.setClearColor(0x000000, 0);
+        if (scene.fog) scene.fog = null;
+      } else {
+        const c = new THREE.Color(hex);
+        renderer.setClearColor(c, 1);
+        fadeMaterial.color.copy(c);
+        if (scene.fog) {
+          scene.fog.color.copy(c);
+          scene.fog.density = isLight ? 0.003 : 0.015;
+        } else {
+          scene.fog = new THREE.FogExp2(c, isLight ? 0.003 : 0.015);
+        }
+      }
 
       const hexDisplay = document.getElementById('bg-hex-display');
-      if (hexDisplay) hexDisplay.textContent = hex.toUpperCase();
+      if (hexDisplay) hexDisplay.textContent = isTrans ? 'TRANSPARENT' : hex.toUpperCase();
       const picker = document.getElementById('custom-bg-picker');
-      if (picker && picker.value !== hex) picker.value = hex;
+      if (picker && !isTrans && picker.value !== hex) picker.value = hex;
 
       document.querySelectorAll('.bg-color-chip').forEach(el => el.classList.remove('selected'));
       if (btnEl) btnEl.classList.add('selected');
@@ -895,12 +945,14 @@ ${metaJson}
 '    #canvas-container { width: 100%; height: 100%; position: absolute; top: 0; left: 0; }\\n' +
 '    #minimal-helper {\\n' +
 '      position: absolute;\\n' +
-'      bottom: 20px;\\n' +
+'      bottom: 24px;\\n' +
 '      left: 50%;\\n' +
-'      transform: translateX(-50%);\\n' +
-'      background: rgba(10, 10, 14, 0.85);\\n' +
-'      backdrop-filter: blur(12px);\\n' +
-'      border: 1px solid rgba(255, 255, 255, 0.15);\\n' +
+'      transform: translateX(-50%) translateY(0);\\n' +
+'      background: rgba(10, 10, 14, 0.88);\\n' +
+'      backdrop-filter: blur(14px);\\n' +
+'      -webkit-backdrop-filter: blur(14px);\\n' +
+'      border: 1px solid rgba(255, 255, 255, 0.16);\\n' +
+'      box-shadow: 0 10px 30px rgba(0, 0, 0, 0.7), 0 0 20px rgba(0, 240, 255, 0.12);\\n' +
 '      border-radius: 30px;\\n' +
 '      padding: 8px 18px;\\n' +
 '      color: #94a3b8;\\n' +
@@ -910,6 +962,10 @@ ${metaJson}
 '      align-items: center;\\n' +
 '      gap: 12px;\\n' +
 '      z-index: 10;\\n' +
+'      opacity: 1;\\n' +
+'      visibility: visible;\\n' +
+'      pointer-events: auto;\\n' +
+'      transition: opacity 0.4s cubic-bezier(0.16, 1, 0.3, 1), transform 0.4s cubic-bezier(0.16, 1, 0.3, 1), visibility 0.4s cubic-bezier(0.16, 1, 0.3, 1);\\n' +
 '    }\\n' +
 '    .helper-btn {\\n' +
 '      background: rgba(255, 255, 255, 0.1);\\n' +
@@ -919,6 +975,36 @@ ${metaJson}
 '      border-radius: 12px;\\n' +
 '      cursor: pointer;\\n' +
 '      font-weight: bold;\\n' +
+'      font-family: monospace;\\n' +
+'      font-size: 11px;\\n' +
+'      transition: all 0.2s ease;\\n' +
+'    }\\n' +
+'    .helper-btn:hover {\\n' +
+'      background: rgba(0, 240, 255, 0.2);\\n' +
+'      border-color: #00F0FF;\\n' +
+'      color: #ffffff;\\n' +
+'      box-shadow: 0 0 10px rgba(0, 240, 255, 0.4);\\n' +
+'    }\\n' +
+'    .helper-shortcuts {\\n' +
+'      color: #64748b;\\n' +
+'      font-size: 10px;\\n' +
+'      border-left: 1px solid rgba(255, 255, 255, 0.15);\\n' +
+'      padding-left: 10px;\\n' +
+'    }\\n' +
+'    @media (max-width: 640px) {\\n' +
+'      .helper-shortcuts { display: none; }\\n' +
+'      #minimal-helper { padding: 6px 12px; gap: 8px; font-size: 10px; }\\n' +
+'    }\\n' +
+'    /* 마우스 미동작 시 마우스포인터와 명령자막 동시 숨김 (Idle Auto-Hide Mode) */\\n' +
+'    body.idle-mode,\\n' +
+'    body.idle-mode * {\\n' +
+'      cursor: none !important;\\n' +
+'    }\\n' +
+'    body.idle-mode #minimal-helper {\\n' +
+'      opacity: 0 !important;\\n' +
+'      visibility: hidden !important;\\n' +
+'      pointer-events: none !important;\\n' +
+'      transform: translateX(-50%) translateY(16px) !important;\\n' +
 '    }\\n' +
 '  </style>\\n' +
 '  <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"><\\/script>\\n' +
@@ -930,6 +1016,7 @@ ${metaJson}
 '    <span id="stage-status-text">✨ Pure Multi-Stage Particle Scene</span>\\n' +
 '    <button class="helper-btn" onclick="togglePlay()">⏯️ <span id="pure-play-btn">Pause</span></button>\\n' +
 '    <button class="helper-btn" onclick="toggleAutoRotate()">🔄 Rotate</button>\\n' +
+'    <span class="helper-shortcuts">Space: 재생/정지 | R: 회전 | F: 전체화면</span>\\n' +
 '  </div>\\n' +
 '  <script>\\n' +
 '    function base64ToFloat32(b64) {\\n' +
@@ -1108,7 +1195,49 @@ ${metaJson}
 '      controls.update();\\n' +
 '      renderer.render(scene, camera);\\n' +
 '    }\\n' +
-'    animate();\\n' +
+'    animate();\\n\\n' +
+'    // --- 마우스 미동작 시 마우스포인터와 명령자막 동시 숨김 / 동작 시 동시 복원 제어 ---\\n' +
+'    let idleTimer = null;\\n' +
+'    let isPointerActive = false;\\n' +
+'    const IDLE_DELAY_MS = 2500;\\n\\n' +
+'    function showCursorAndSubtitles() {\\n' +
+'      document.body.classList.remove("idle-mode");\\n' +
+'    }\\n\\n' +
+'    function hideCursorAndSubtitles() {\\n' +
+'      if (isPointerActive) return;\\n' +
+'      document.body.classList.add("idle-mode");\\n' +
+'    }\\n\\n' +
+'    function handleActivity() {\\n' +
+'      showCursorAndSubtitles();\\n' +
+'      if (idleTimer) clearTimeout(idleTimer);\\n' +
+'      idleTimer = setTimeout(hideCursorAndSubtitles, IDLE_DELAY_MS);\\n' +
+'    }\\n\\n' +
+'    window.addEventListener("mousemove", handleActivity, { passive: true });\\n' +
+'    window.addEventListener("pointermove", handleActivity, { passive: true });\\n' +
+'    window.addEventListener("mousedown", () => { isPointerActive = true; handleActivity(); }, { passive: true });\\n' +
+'    window.addEventListener("mouseup", () => { isPointerActive = false; handleActivity(); }, { passive: true });\\n' +
+'    window.addEventListener("pointerdown", () => { isPointerActive = true; handleActivity(); }, { passive: true });\\n' +
+'    window.addEventListener("pointerup", () => { isPointerActive = false; handleActivity(); }, { passive: true });\\n' +
+'    window.addEventListener("wheel", handleActivity, { passive: true });\\n' +
+'    window.addEventListener("touchstart", handleActivity, { passive: true });\\n' +
+'    window.addEventListener("touchmove", handleActivity, { passive: true });\\n' +
+'    window.addEventListener("touchend", handleActivity, { passive: true });\\n\\n' +
+'    window.addEventListener("keydown", (e) => {\\n' +
+'      handleActivity();\\n' +
+'      if (e.code === "Space") {\\n' +
+'        e.preventDefault();\\n' +
+'        togglePlay();\\n' +
+'      } else if (e.key === "r" || e.key === "R" || e.key === "ㄱ") {\\n' +
+'        toggleAutoRotate();\\n' +
+'      } else if (e.key === "f" || e.key === "F" || e.key === "ㄹ") {\\n' +
+'        if (!document.fullscreenElement) {\\n' +
+'          document.documentElement.requestFullscreen().catch(() => {});\\n' +
+'        } else {\\n' +
+'          document.exitFullscreen().catch(() => {});\\n' +
+'        }\\n' +
+'      }\\n' +
+'    });\\n\\n' +
+'    idleTimer = setTimeout(hideCursorAndSubtitles, IDLE_DELAY_MS);\\n' +
 '  <\\/script>\\n' +
 '</body>\\n' +
 '</html>';
@@ -1433,7 +1562,10 @@ export function exportPureParticleHtml(
     config.particleType === 'bird' ? 8 :
     config.particleType === 'feather' ? 9 : 10;
 
-  const bgColor = customBgColor || config.backgroundColor || '#030712';
+  const bgColor = customBgColor || config.backgroundColor || 'transparent';
+  const isPureTransparent = isTransparentBackground(bgColor);
+  const isPureLightBg = isLightBackgroundColor(bgColor);
+  const shouldNormalBlend = isPureLightBg || isPureTransparent;
   const escapedVShader = JSON.stringify(particleVertexShader);
   const escapedFShader = JSON.stringify(particleFragmentShader);
   const chainTitle = chain.map((s) => s.name.replace(/<[^>]*>/g, '')).join(' ➔ ');
@@ -1447,7 +1579,7 @@ export function exportPureParticleHtml(
   <style>
     * { box-sizing: border-box; margin: 0; padding: 0; }
     body {
-      background-color: ${bgColor};
+      background-color: ${isPureTransparent ? 'transparent' : bgColor};
       overflow: hidden;
       width: 100vw;
       height: 100vh;
@@ -1458,12 +1590,14 @@ export function exportPureParticleHtml(
     #canvas-container { width: 100%; height: 100%; position: absolute; top: 0; left: 0; }
     #minimal-helper {
       position: absolute;
-      bottom: 20px;
+      bottom: 24px;
       left: 50%;
-      transform: translateX(-50%);
-      background: rgba(10, 10, 14, 0.85);
-      backdrop-filter: blur(12px);
-      border: 1px solid rgba(255, 255, 255, 0.15);
+      transform: translateX(-50%) translateY(0);
+      background: rgba(10, 10, 14, 0.88);
+      backdrop-filter: blur(14px);
+      -webkit-backdrop-filter: blur(14px);
+      border: 1px solid rgba(255, 255, 255, 0.16);
+      box-shadow: 0 10px 30px rgba(0, 0, 0, 0.7), 0 0 20px rgba(0, 240, 255, 0.12);
       border-radius: 30px;
       padding: 8px 18px;
       color: #94a3b8;
@@ -1473,6 +1607,10 @@ export function exportPureParticleHtml(
       align-items: center;
       gap: 12px;
       z-index: 10;
+      opacity: 1;
+      visibility: visible;
+      pointer-events: auto;
+      transition: opacity 0.4s cubic-bezier(0.16, 1, 0.3, 1), transform 0.4s cubic-bezier(0.16, 1, 0.3, 1), visibility 0.4s cubic-bezier(0.16, 1, 0.3, 1);
     }
     .helper-btn {
       background: rgba(255, 255, 255, 0.1);
@@ -1482,6 +1620,36 @@ export function exportPureParticleHtml(
       border-radius: 12px;
       cursor: pointer;
       font-weight: bold;
+      font-family: monospace;
+      font-size: 11px;
+      transition: all 0.2s ease;
+    }
+    .helper-btn:hover {
+      background: rgba(0, 240, 255, 0.2);
+      border-color: #00F0FF;
+      color: #ffffff;
+      box-shadow: 0 0 10px rgba(0, 240, 255, 0.4);
+    }
+    .helper-shortcuts {
+      color: #64748b;
+      font-size: 10px;
+      border-left: 1px solid rgba(255, 255, 255, 0.15);
+      padding-left: 10px;
+    }
+    @media (max-width: 640px) {
+      .helper-shortcuts { display: none; }
+      #minimal-helper { padding: 6px 12px; gap: 8px; font-size: 10px; }
+    }
+    /* 마우스 미동작 시 마우스포인터와 명령자막 동시 숨김 (Idle Auto-Hide Mode) */
+    body.idle-mode,
+    body.idle-mode * {
+      cursor: none !important;
+    }
+    body.idle-mode #minimal-helper {
+      opacity: 0 !important;
+      visibility: hidden !important;
+      pointer-events: none !important;
+      transform: translateX(-50%) translateY(16px) !important;
     }
   </style>
   <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
@@ -1493,6 +1661,7 @@ export function exportPureParticleHtml(
     <span id="pure-stage-status">✨ ${chainTitle}</span>
     <button class="helper-btn" onclick="togglePlay()">⏯️ <span id="pure-play-btn">Pause</span></button>
     <button class="helper-btn" onclick="toggleAutoRotate()">🔄 Rotate</button>
+    <span class="helper-shortcuts">Space: 재생/정지 | R: 회전 | F: 전체화면</span>
   </div>
   <script>
     function base64ToFloat32(b64) {
@@ -1550,7 +1719,11 @@ export function exportPureParticleHtml(
     const renderer = new THREE.WebGLRenderer({ antialias: true, alpha: true, preserveDrawingBuffer: false });
     renderer.setSize(window.innerWidth, window.innerHeight);
     renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
-    renderer.setClearColor(new THREE.Color("${bgColor}"), 1);
+    if (${isPureTransparent}) {
+      renderer.setClearColor(0x000000, 0);
+    } else {
+      renderer.setClearColor(new THREE.Color("${bgColor}"), 1);
+    }
     document.getElementById('canvas-container').appendChild(renderer.domElement);
 
     const controls = new THREE.OrbitControls(camera, renderer.domElement);
@@ -1585,6 +1758,7 @@ export function exportPureParticleHtml(
       uVelocityShift: { value: ${config.velocityColorShift ?? 1.0} },
       uColorGamma: { value: ${config.colorGamma ?? 1.0} },
       uGlowIntensity: { value: ${config.glowIntensity} },
+      uIsLightBackground: { value: ${shouldNormalBlend ? '1.0' : '0.0'} },
       uParticleType: { value: ${particleTypeInt} },
       uShapeRotation: { value: 0.0 },
       uCoreRatio: { value: ${config.coreRatio ?? 0.8} }
@@ -1596,7 +1770,7 @@ export function exportPureParticleHtml(
       uniforms: uniforms,
       transparent: true,
       depthWrite: false,
-      blending: THREE.AdditiveBlending
+      blending: ${shouldNormalBlend ? 'THREE.NormalBlending' : 'THREE.AdditiveBlending'}
     });
 
     const particles = new THREE.Points(geometry, material);
@@ -1696,6 +1870,55 @@ export function exportPureParticleHtml(
       renderer.render(scene, camera);
     }
     animate();
+
+    // --- 마우스 미동작 시 마우스포인터와 명령자막 동시 숨김 / 동작 시 동시 복원 제어 ---
+    let idleTimer = null;
+    let isPointerActive = false;
+    const IDLE_DELAY_MS = 2500;
+
+    function showCursorAndSubtitles() {
+      document.body.classList.remove('idle-mode');
+    }
+
+    function hideCursorAndSubtitles() {
+      if (isPointerActive) return;
+      document.body.classList.add('idle-mode');
+    }
+
+    function handleActivity() {
+      showCursorAndSubtitles();
+      if (idleTimer) clearTimeout(idleTimer);
+      idleTimer = setTimeout(hideCursorAndSubtitles, IDLE_DELAY_MS);
+    }
+
+    window.addEventListener('mousemove', handleActivity, { passive: true });
+    window.addEventListener('pointermove', handleActivity, { passive: true });
+    window.addEventListener('mousedown', () => { isPointerActive = true; handleActivity(); }, { passive: true });
+    window.addEventListener('mouseup', () => { isPointerActive = false; handleActivity(); }, { passive: true });
+    window.addEventListener('pointerdown', () => { isPointerActive = true; handleActivity(); }, { passive: true });
+    window.addEventListener('pointerup', () => { isPointerActive = false; handleActivity(); }, { passive: true });
+    window.addEventListener('wheel', handleActivity, { passive: true });
+    window.addEventListener('touchstart', handleActivity, { passive: true });
+    window.addEventListener('touchmove', handleActivity, { passive: true });
+    window.addEventListener('touchend', handleActivity, { passive: true });
+
+    window.addEventListener('keydown', (e) => {
+      handleActivity();
+      if (e.code === 'Space') {
+        e.preventDefault();
+        togglePlay();
+      } else if (e.key === 'r' || e.key === 'R' || e.key === 'ㄱ') {
+        toggleAutoRotate();
+      } else if (e.key === 'f' || e.key === 'F' || e.key === 'ㄹ') {
+        if (!document.fullscreenElement) {
+          document.documentElement.requestFullscreen().catch(() => {});
+        } else {
+          document.exitFullscreen().catch(() => {});
+        }
+      }
+    });
+
+    idleTimer = setTimeout(hideCursorAndSubtitles, IDLE_DELAY_MS);
   </script>
 </body>
 </html>`;

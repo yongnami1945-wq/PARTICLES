@@ -16,6 +16,7 @@ import { audioEngine } from '../utils/audioEngine';
 import { exportPointCloudPLY, exportPointCloudOBJ, exportPointCloudXYZ, exportPointCloudCSV } from '../utils/pointCloudExporter';
 import { BUILTIN_PRESETS } from '../utils/presetManager';
 import { VisualTimelineEditor, EASING_OPTIONS } from './VisualTimelineEditor';
+import { isTransparentBackground } from './ParticleCanvas';
 
 export type RibbonTabType = 'shapes' | 'morph' | 'physics' | 'visuals' | 'fx_audio' | 'export' | null;
 
@@ -1527,11 +1528,29 @@ export const RibbonMenuBar: React.FC<RibbonMenuBarProps> = ({
                 <div className="space-y-3 bg-[#141418] border border-[#2A2A2E] p-3.5">
                   <div className="flex items-center justify-between">
                     <h4 className="text-xs font-bold text-[#00F0FF] uppercase">03. 캔버스 배경색 & 궤적</h4>
-                    <span className="text-[9px] text-[#00F0FF] font-mono">{config.backgroundColor || '#030712'}</span>
+                    <span className="text-[9px] text-[#00F0FF] font-mono">
+                      {isTransparentBackground(config.backgroundColor)
+                        ? '투명 (색상 없음)'
+                        : config.backgroundColor || '#030712'}
+                    </span>
                   </div>
 
                   {/* Background palettes */}
                   <div className="flex items-center gap-1 flex-wrap">
+                    {/* Transparent Option */}
+                    <button
+                      type="button"
+                      onClick={() => onChangeConfig({ backgroundColor: 'transparent' })}
+                      className={`w-6 h-6 rounded border transition cursor-pointer canvas-transparent-bg flex items-center justify-center ${
+                        isTransparentBackground(config.backgroundColor)
+                          ? 'border-[#00F0FF] scale-110 shadow-[0_0_8px_#00F0FF]'
+                          : 'border-[#2A2A2E]'
+                      }`}
+                      title="색상 없음 (투명)"
+                    >
+                      <span className="text-[8px] font-bold text-gray-800 bg-white/70 px-0.5 rounded">∅</span>
+                    </button>
+
                     {[
                       { color: '#030712', label: '딥 스페이스' },
                       { color: '#000000', label: '순수 블랙' },
@@ -1546,6 +1565,7 @@ export const RibbonMenuBar: React.FC<RibbonMenuBarProps> = ({
                         type="button"
                         onClick={() => onChangeConfig({ backgroundColor: item.color })}
                         className={`w-6 h-6 rounded border transition cursor-pointer ${
+                          !isTransparentBackground(config.backgroundColor) &&
                           (config.backgroundColor || '#030712').toLowerCase() === item.color.toLowerCase()
                             ? 'border-[#00F0FF] scale-110 shadow-[0_0_8px_#00F0FF]'
                             : 'border-[#2A2A2E]'
@@ -1556,7 +1576,7 @@ export const RibbonMenuBar: React.FC<RibbonMenuBarProps> = ({
                     ))}
                     <input
                       type="color"
-                      value={config.backgroundColor || '#030712'}
+                      value={isTransparentBackground(config.backgroundColor) ? '#000000' : (config.backgroundColor || '#030712')}
                       onChange={(e) => onChangeConfig({ backgroundColor: e.target.value })}
                       className="w-6 h-6 rounded bg-transparent cursor-pointer border border-[#2A2A2E] ml-auto"
                       title="직접 색상 선택"

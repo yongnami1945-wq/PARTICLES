@@ -17,7 +17,7 @@ import {
   getAutoRestoreEnabled 
 } from './utils/presetManager';
 import { RibbonMenuBar } from './components/RibbonMenuBar';
-import { ParticleCanvas, ParticleCanvasHandle } from './components/ParticleCanvas';
+import { ParticleCanvas, ParticleCanvasHandle, isTransparentBackground, isLightBackgroundColor } from './components/ParticleCanvas';
 import { ControlPanel } from './components/ControlPanel';
 import { ImageUploaderModal } from './components/ImageUploaderModal';
 import { WasmModal } from './components/WasmModal';
@@ -36,7 +36,8 @@ import { motion, AnimatePresence } from 'motion/react';
 import { 
   Play, Pause, RotateCcw, Waves, Camera, Sparkles, 
   PanelRightOpen, PanelRightClose, Layers, HardDrive, Maximize2,
-  Zap, Clock, X, Video, Undo2, Redo2
+  Zap, Clock, X, Video, Undo2, Redo2, ChevronDown, ChevronUp,
+  PanelLeft, PanelBottom
 } from 'lucide-react';
 
 export default function App() {
@@ -267,7 +268,7 @@ export default function App() {
     autoRotate: true,
     rotateSpeed: 0.6,
     depthTest: false,
-    backgroundColor: '#030712',
+    backgroundColor: 'transparent',
 
     // Motion Trails & Ghost Path Highlighting
     trailsEnabled: false,
@@ -315,6 +316,8 @@ export default function App() {
   const [isImportNamedPresetOpen, setIsImportNamedPresetOpen] = useState<boolean>(false);
   const [isSidebarOpen, setIsSidebarOpen] = useState<boolean>(false);
   const [isTimelineDrawerOpen, setIsTimelineDrawerOpen] = useState<boolean>(false);
+  const [timelinePlacement, setTimelinePlacement] = useState<'bottom' | 'side'>('bottom');
+  const [isBottomDockCollapsed, setIsBottomDockCollapsed] = useState<boolean>(false);
 
   // Action Feedback Toast notification
   const [toastMessage, setToastMessage] = useState<string | null>(null);
@@ -691,7 +694,16 @@ export default function App() {
       {/* Main Workspace (Full-Width 3D Particle Canvas + Optional Slide-Over Control Sidebar) */}
       <div className="flex-1 flex overflow-hidden relative">
         {/* Full Viewport 3D WebGL Particle Canvas */}
-        <main className="flex-1 h-full w-full relative">
+        <main
+          className={`flex-1 h-full w-full relative transition-colors duration-300 ${
+            isTransparentBackground(config.backgroundColor) ? 'canvas-transparent-bg' : ''
+          }`}
+          style={{
+            backgroundColor: isTransparentBackground(config.backgroundColor)
+              ? 'transparent'
+              : (config.backgroundColor || '#030712'),
+          }}
+        >
           <ParticleCanvas
             ref={canvasRef}
             config={config}
@@ -707,46 +719,78 @@ export default function App() {
           {/* Floating Expandable Visual Timeline Editor Drawer (Draggable & Reorderable Morph Sequence) */}
           <AnimatePresence>
             {isTimelineDrawerOpen && (
-              <motion.div
-                key="timeline-drawer-panel"
-                initial={{ opacity: 0, y: 36, scale: 0.96, x: '-50%' }}
-                animate={{ opacity: 1, y: 0, scale: 1, x: '-50%' }}
-                exit={{ opacity: 0, y: 28, scale: 0.96, x: '-50%' }}
-                transition={{ type: 'spring', damping: 28, stiffness: 320, mass: 0.8 }}
-                className="absolute bottom-24 left-1/2 z-30 w-full max-w-4xl px-4 pointer-events-auto"
-              >
-                <div className="relative shadow-[0_20px_50px_rgba(0,0,0,0.85)] border-2 border-amber-400/80 bg-[#0C0C10]/95 backdrop-blur-xl">
-                  <button
-                    onClick={() => setIsTimelineDrawerOpen(false)}
-                    className="absolute top-2 right-2 p-1 text-gray-400 hover:text-white hover:bg-[#2A2A35] rounded transition cursor-pointer z-10"
-                    title="타임라인 에디터 닫기"
-                  >
-                    <X className="w-4 h-4" />
-                  </button>
-                  <VisualTimelineEditor
-                    shapes={shapes}
-                    sourceShapeId={sourceShapeId}
-                    targetShapeId={targetShapeId}
-                    waypointShapeIds={waypointShapeIds}
-                    config={config}
-                    onChangeConfig={handleUpdateConfig}
-                    onSelectSource={setSourceShapeId}
-                    onSelectTarget={setTargetShapeId}
-                    onAddWaypoint={handleAddWaypoint}
-                    onRemoveWaypoint={handleRemoveWaypoint}
-                    onUpdateWaypoint={handleUpdateWaypoint}
-                    onReorderChain={handleReorderChain}
-                    onSwapShapes={handleSwapShapes}
-                  />
-                </div>
-              </motion.div>
+              timelinePlacement === 'side' ? (
+                <motion.div
+                  key="timeline-drawer-panel-side"
+                  initial={{ opacity: 0, x: -30, scale: 0.96 }}
+                  animate={{ opacity: 1, x: 0, scale: 1 }}
+                  exit={{ opacity: 0, x: -30, scale: 0.96 }}
+                  transition={{ type: 'spring', damping: 28, stiffness: 320, mass: 0.8 }}
+                  className="fixed top-14 left-3 bottom-16 z-30 w-80 sm:w-[410px] max-w-[92vw] pointer-events-auto flex flex-col"
+                >
+                  <div className="relative flex-1 flex flex-col overflow-hidden shadow-[0_20px_50px_rgba(0,0,0,0.85)] border-2 border-[#00F0FF]/80 bg-[#0C0C10]/95 backdrop-blur-xl">
+                    <div className="flex-1 overflow-y-auto custom-scrollbar">
+                      <VisualTimelineEditor
+                        shapes={shapes}
+                        sourceShapeId={sourceShapeId}
+                        targetShapeId={targetShapeId}
+                        waypointShapeIds={waypointShapeIds}
+                        config={config}
+                        onChangeConfig={handleUpdateConfig}
+                        onSelectSource={setSourceShapeId}
+                        onSelectTarget={setTargetShapeId}
+                        onAddWaypoint={handleAddWaypoint}
+                        onRemoveWaypoint={handleRemoveWaypoint}
+                        onUpdateWaypoint={handleUpdateWaypoint}
+                        onReorderChain={handleReorderChain}
+                        onSwapShapes={handleSwapShapes}
+                        placement="side"
+                        onChangePlacement={setTimelinePlacement}
+                        onClose={() => setIsTimelineDrawerOpen(false)}
+                      />
+                    </div>
+                  </div>
+                </motion.div>
+              ) : (
+                <motion.div
+                  key="timeline-drawer-panel-bottom"
+                  initial={{ opacity: 0, y: 32, scale: 0.96, x: '-50%' }}
+                  animate={{ opacity: 1, y: 0, scale: 1, x: '-50%' }}
+                  exit={{ opacity: 0, y: 24, scale: 0.96, x: '-50%' }}
+                  transition={{ type: 'spring', damping: 28, stiffness: 320, mass: 0.8 }}
+                  className="absolute bottom-20 sm:bottom-24 left-1/2 z-30 w-full max-w-4xl px-3 pointer-events-auto"
+                >
+                  <div className="relative max-h-[calc(100vh-160px)] flex flex-col overflow-hidden shadow-[0_20px_50px_rgba(0,0,0,0.85)] border-2 border-amber-400/80 bg-[#0C0C10]/95 backdrop-blur-xl">
+                    <div className="overflow-y-auto custom-scrollbar">
+                      <VisualTimelineEditor
+                        shapes={shapes}
+                        sourceShapeId={sourceShapeId}
+                        targetShapeId={targetShapeId}
+                        waypointShapeIds={waypointShapeIds}
+                        config={config}
+                        onChangeConfig={handleUpdateConfig}
+                        onSelectSource={setSourceShapeId}
+                        onSelectTarget={setTargetShapeId}
+                        onAddWaypoint={handleAddWaypoint}
+                        onRemoveWaypoint={handleRemoveWaypoint}
+                        onUpdateWaypoint={handleUpdateWaypoint}
+                        onReorderChain={handleReorderChain}
+                        onSwapShapes={handleSwapShapes}
+                        placement="bottom"
+                        onChangePlacement={setTimelinePlacement}
+                        onClose={() => setIsTimelineDrawerOpen(false)}
+                      />
+                    </div>
+                  </div>
+                </motion.div>
+              )
             )}
           </AnimatePresence>
 
           {/* Bottom Floating Quick Controller Dock (Minimally overlaid on Canvas with Stage Waypoints) */}
-          <div className="absolute bottom-5 left-1/2 -translate-x-1/2 z-30 flex flex-col items-center gap-1.5 select-none transition-all duration-200">
-            {/* Multi-Stage Waypoint Station Track Pills (Visible when waypoints exist) */}
-            {morphChain.length > 2 && (
+          <div className="absolute bottom-3 left-1/2 -translate-x-1/2 z-30 flex flex-col items-center gap-1.5 select-none transition-all duration-200 pointer-events-auto">
+            {/* Multi-Stage Waypoint Station Track Pills (Visible when waypoints exist and not obscured by bottom drawer) */}
+            {morphChain.length > 2 && (!isTimelineDrawerOpen || timelinePlacement === 'side') && !isBottomDockCollapsed && (
               <div className="flex items-center gap-1.5 bg-[#0F0F14]/90 backdrop-blur-md border border-[#2A2A34] px-3 py-1 rounded-full shadow-[0_4px_15px_rgba(0,0,0,0.6)] text-[10px]">
                 <span className="text-[#00F0FF] font-bold">STAGE</span>
                 {morphChain.map((shape, idx) => {
@@ -774,108 +818,168 @@ export default function App() {
               </div>
             )}
 
-            <div className="bg-[#0F0F14]/85 hover:bg-[#0F0F14]/95 backdrop-blur-md border border-[#2A2A34] hover:border-[#00F0FF]/50 px-4 py-2 rounded-full shadow-[0_10px_25px_rgba(0,0,0,0.7)] flex items-center gap-3">
-              {/* Visual Timeline Sequence Editor Drawer Toggle */}
-              <button
-                onClick={() => setIsTimelineDrawerOpen((prev) => !prev)}
-                className={`p-1.5 px-2.5 rounded-full border text-[10px] font-bold uppercase transition flex items-center gap-1 cursor-pointer ${
-                  isTimelineDrawerOpen
-                    ? 'bg-[#FFE600] text-black border-[#FFE600] shadow-[0_0_10px_#FFE600]'
-                    : 'bg-[#18181E] border-[#2A2A2E] text-amber-400 hover:text-white'
-                }`}
-                title="드래그 앤 드롭 비주얼 타임라인 시퀀스 에디터 열기/닫기"
-              >
-                <Zap className="w-3 h-3" />
-                <span className="hidden sm:inline">타임라인 에디터</span>
-              </button>
+            {isBottomDockCollapsed ? (
+              /* Minimized Compact Bottom Dock */
+              <div className="bg-[#0F0F14]/90 hover:bg-[#0F0F14]/98 backdrop-blur-md border border-[#2A2A34] px-3 py-1.5 rounded-full shadow-[0_8px_20px_rgba(0,0,0,0.8)] flex items-center gap-2">
+                <button
+                  onClick={() => handleUpdateConfig({ isPlaying: !config.isPlaying })}
+                  className={`p-1.5 rounded-full font-bold transition flex items-center justify-center cursor-pointer ${
+                    config.isPlaying
+                      ? 'bg-[#00F0FF] text-black shadow-[0_0_10px_#00F0FF]'
+                      : 'bg-[#222228] text-white hover:bg-[#33333C]'
+                  }`}
+                  title={config.isPlaying ? '일시 정지' : '실시간 몰핑 재생'}
+                >
+                  {config.isPlaying ? <Pause className="w-3 h-3" /> : <Play className="w-3 h-3 fill-current" />}
+                </button>
 
-              {/* Play / Pause Toggle Button */}
-              <button
-                onClick={() => handleUpdateConfig({ isPlaying: !config.isPlaying })}
-                className={`p-2 rounded-full font-bold uppercase transition flex items-center justify-center cursor-pointer ${
-                  config.isPlaying
-                    ? 'bg-[#00F0FF] text-black shadow-[0_0_12px_#00F0FF]'
-                    : 'bg-[#222228] text-white hover:bg-[#33333C]'
-                }`}
-                title={config.isPlaying ? '일시 정지 (Space/Click)' : '실시간 몰핑 재생'}
-              >
-                {config.isPlaying ? <Pause className="w-3.5 h-3.5" /> : <Play className="w-3.5 h-3.5 fill-current" />}
-              </button>
+                <span className="text-[11px] font-mono text-[#00F0FF] font-bold">
+                  {(config.progress * 100).toFixed(0)}%
+                </span>
 
-              {/* Reset Button */}
-              <button
-                onClick={() => handleUpdateConfig({ progress: 0 })}
-                className="p-1.5 rounded-full bg-[#222228] hover:bg-[#33333C] text-gray-300 hover:text-white transition cursor-pointer"
-                title="0% 처음으로 리셋"
-              >
-                <RotateCcw className="w-3.5 h-3.5" />
-              </button>
+                <div className="h-3 w-px bg-[#2A2A34]" />
 
-              {/* Interactive Morph Progress Scrubber Slider with Waypoint Ticks */}
-              <div className="flex flex-col justify-center px-1">
-                <div className="flex items-center gap-2">
-                  <span className="text-[10px] font-bold text-gray-400">0%</span>
-                  <div className="relative flex items-center">
-                    <input
-                      type="range"
-                      min="0"
-                      max="1"
-                      step="0.001"
-                      value={config.progress}
-                      onChange={(e) => {
-                        handleUpdateConfig({ progress: parseFloat(e.target.value), isPlaying: false });
-                      }}
-                      className="w-32 sm:w-56 h-1.5 bg-[#2A2A2E] appearance-none cursor-pointer accent-[#00F0FF]"
-                      title="몰핑 진행도 스크러빙"
-                    />
-                    {/* Waypoint Tick Marks along the slider */}
-                    {morphChain.length > 2 && (
-                      <div className="absolute inset-0 pointer-events-none flex justify-between items-center px-0.5">
-                        {morphChain.map((_, idx) => (
-                          <div
-                            key={`tick-${idx}`}
-                            className={`w-1.5 h-1.5 rounded-full ${
-                              idx === 0 ? 'bg-[#00F0FF]' : idx === morphChain.length - 1 ? 'bg-white' : 'bg-amber-400'
-                            }`}
-                            style={{
-                              position: 'absolute',
-                              left: `${(idx / (morphChain.length - 1)) * 100}%`,
-                              transform: 'translateX(-50%)',
-                            }}
-                          />
-                        ))}
-                      </div>
-                    )}
-                  </div>
-                  <span className="text-[11px] font-mono text-[#00F0FF] w-9 text-right font-bold">
-                    {(config.progress * 100).toFixed(0)}%
-                  </span>
-                </div>
+                <button
+                  onClick={() => setIsTimelineDrawerOpen((prev) => !prev)}
+                  className={`p-1 px-2 rounded-full border text-[9px] font-bold uppercase transition flex items-center gap-1 cursor-pointer ${
+                    isTimelineDrawerOpen
+                      ? 'bg-[#FFE600] text-black border-[#FFE600]'
+                      : 'bg-[#18181E] border-[#2A2A2E] text-amber-400 hover:text-white'
+                  }`}
+                  title="타임라인 에디터 열기/닫기"
+                >
+                  <Zap className="w-2.5 h-2.5" />
+                  <span>타임라인</span>
+                </button>
+
+                <div className="h-3 w-px bg-[#2A2A34]" />
+
+                <button
+                  onClick={() => setIsBottomDockCollapsed(false)}
+                  className="p-1 px-2 rounded-full bg-[#1A1A24] hover:bg-[#252535] text-gray-300 hover:text-[#00F0FF] text-[9px] font-bold flex items-center gap-1 transition cursor-pointer border border-[#2F2F3D]"
+                  title="하단 메뉴바 전체 펼치기"
+                >
+                  <ChevronUp className="w-3 h-3" />
+                  <span>펼치기</span>
+                </button>
               </div>
+            ) : (
+              /* Full Expanded Bottom Dock */
+              <div className="bg-[#0F0F14]/85 hover:bg-[#0F0F14]/95 backdrop-blur-md border border-[#2A2A34] hover:border-[#00F0FF]/50 px-3.5 py-1.5 rounded-full shadow-[0_10px_25px_rgba(0,0,0,0.7)] flex items-center gap-2 sm:gap-2.5">
+                {/* Visual Timeline Sequence Editor Drawer Toggle */}
+                <button
+                  onClick={() => setIsTimelineDrawerOpen((prev) => !prev)}
+                  className={`p-1.5 px-2 rounded-full border text-[10px] font-bold uppercase transition flex items-center gap-1 cursor-pointer ${
+                    isTimelineDrawerOpen
+                      ? 'bg-[#FFE600] text-black border-[#FFE600] shadow-[0_0_10px_#FFE600]'
+                      : 'bg-[#18181E] border-[#2A2A2E] text-amber-400 hover:text-white'
+                  }`}
+                  title="드래그 앤 드롭 비주얼 타임라인 시퀀스 에디터 열기/닫기"
+                >
+                  <Zap className="w-3 h-3" />
+                  <span className="hidden sm:inline">타임라인</span>
+                </button>
 
-              {/* Ghost Trails Toggle */}
-              <button
-                onClick={() => handleUpdateConfig({ trailsEnabled: !config.trailsEnabled })}
-                className={`p-1.5 px-2.5 rounded-full border text-[10px] font-bold uppercase transition flex items-center gap-1 cursor-pointer ${
-                  config.trailsEnabled
-                    ? 'bg-[#00F0FF]/20 border-[#00F0FF] text-[#00F0FF] shadow-[0_0_8px_rgba(0,240,255,0.3)]'
-                    : 'bg-[#18181E] border-[#2A2A2E] text-gray-400 hover:text-white'
-                }`}
-                title="파티클 궤적 모션 블러 토글"
-              >
-                <Waves className="w-3 h-3" />
-                <span className="hidden sm:inline">궤적</span>
-              </button>
+                {/* Play / Pause Toggle Button */}
+                <button
+                  onClick={() => handleUpdateConfig({ isPlaying: !config.isPlaying })}
+                  className={`p-1.5 sm:p-2 rounded-full font-bold uppercase transition flex items-center justify-center cursor-pointer ${
+                    config.isPlaying
+                      ? 'bg-[#00F0FF] text-black shadow-[0_0_12px_#00F0FF]'
+                      : 'bg-[#222228] text-white hover:bg-[#33333C]'
+                  }`}
+                  title={config.isPlaying ? '일시 정지 (Space/Click)' : '실시간 몰핑 재생'}
+                >
+                  {config.isPlaying ? <Pause className="w-3.5 h-3.5" /> : <Play className="w-3.5 h-3.5 fill-current" />}
+                </button>
 
-              {/* Quick 4K Snapshot Button */}
-              <button
-                onClick={() => canvasRef.current?.captureSnapshot()}
-                className="p-1.5 rounded-full bg-[#18181E] hover:border-[#00F0FF] border border-[#2A2A2E] text-gray-300 hover:text-[#00F0FF] transition cursor-pointer"
-                title="현재 뷰포트 고해상도 스냅샷 캡처 (PNG)"
-              >
-                <Camera className="w-3.5 h-3.5" />
-              </button>
-            </div>
+                {/* Reset Button */}
+                <button
+                  onClick={() => handleUpdateConfig({ progress: 0 })}
+                  className="p-1.5 rounded-full bg-[#222228] hover:bg-[#33333C] text-gray-300 hover:text-white transition cursor-pointer"
+                  title="0% 처음으로 리셋"
+                >
+                  <RotateCcw className="w-3 h-3" />
+                </button>
+
+                {/* Interactive Morph Progress Scrubber Slider with Waypoint Ticks */}
+                <div className="flex flex-col justify-center px-1">
+                  <div className="flex items-center gap-1.5 sm:gap-2">
+                    <span className="text-[10px] font-bold text-gray-400">0%</span>
+                    <div className="relative flex items-center">
+                      <input
+                        type="range"
+                        min="0"
+                        max="1"
+                        step="0.001"
+                        value={config.progress}
+                        onChange={(e) => {
+                          handleUpdateConfig({ progress: parseFloat(e.target.value), isPlaying: false });
+                        }}
+                        className="w-24 sm:w-48 md:w-56 h-1.5 bg-[#2A2A2E] appearance-none cursor-pointer accent-[#00F0FF]"
+                        title="몰핑 진행도 스크러빙"
+                      />
+                      {/* Waypoint Tick Marks along the slider */}
+                      {morphChain.length > 2 && (
+                        <div className="absolute inset-0 pointer-events-none flex justify-between items-center px-0.5">
+                          {morphChain.map((_, idx) => (
+                            <div
+                              key={`tick-${idx}`}
+                              className={`w-1.5 h-1.5 rounded-full ${
+                                idx === 0 ? 'bg-[#00F0FF]' : idx === morphChain.length - 1 ? 'bg-white' : 'bg-amber-400'
+                              }`}
+                              style={{
+                                position: 'absolute',
+                                left: `${(idx / (morphChain.length - 1)) * 100}%`,
+                                transform: 'translateX(-50%)',
+                              }}
+                            />
+                          ))}
+                        </div>
+                      )}
+                    </div>
+                    <span className="text-[10px] sm:text-[11px] font-mono text-[#00F0FF] w-8 sm:w-9 text-right font-bold">
+                      {(config.progress * 100).toFixed(0)}%
+                    </span>
+                  </div>
+                </div>
+
+                {/* Ghost Trails Toggle */}
+                <button
+                  onClick={() => handleUpdateConfig({ trailsEnabled: !config.trailsEnabled })}
+                  className={`p-1.5 px-2 rounded-full border text-[10px] font-bold uppercase transition flex items-center gap-1 cursor-pointer ${
+                    config.trailsEnabled
+                      ? 'bg-[#00F0FF]/20 border-[#00F0FF] text-[#00F0FF] shadow-[0_0_8px_rgba(0,240,255,0.3)]'
+                      : 'bg-[#18181E] border-[#2A2A2E] text-gray-400 hover:text-white'
+                  }`}
+                  title="파티클 궤적 모션 블러 토글"
+                >
+                  <Waves className="w-3 h-3" />
+                  <span className="hidden sm:inline">궤적</span>
+                </button>
+
+                {/* Quick 4K Snapshot Button */}
+                <button
+                  onClick={() => canvasRef.current?.captureSnapshot()}
+                  className="p-1.5 rounded-full bg-[#18181E] hover:border-[#00F0FF] border border-[#2A2A2E] text-gray-300 hover:text-[#00F0FF] transition cursor-pointer"
+                  title="현재 뷰포트 고해상도 스냅샷 캡처 (PNG)"
+                >
+                  <Camera className="w-3 h-3" />
+                </button>
+
+                <div className="h-3 w-px bg-[#2A2A34]" />
+
+                {/* Collapse / Fold Bottom Menu Bar Button */}
+                <button
+                  onClick={() => setIsBottomDockCollapsed(true)}
+                  className="p-1.5 px-2 rounded-full bg-[#18181E] hover:bg-[#252530] border border-[#2A2A2E] text-gray-400 hover:text-white transition flex items-center gap-1 cursor-pointer"
+                  title="하단 메뉴바 접기 / 최소화"
+                >
+                  <ChevronDown className="w-3 h-3" />
+                  <span className="text-[9px] font-bold hidden sm:inline">접기</span>
+                </button>
+              </div>
+            )}
           </div>
         </main>
 

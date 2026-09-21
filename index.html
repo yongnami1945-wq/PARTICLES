@@ -9,6 +9,44 @@
     <meta property="og:description" content="High-performance real-time 3D particle morphing simulator with instant WebGL GPU preview, particles.js / tsParticles online preset auto-importer, Python NumPy/Open3D simulation scripts, image-to-particle conversion, and standalone HTML export." />
     <meta property="og:type" content="website" />
     <meta name="twitter:card" content="summary_large_image" />
+    <script>
+      // Suppress third-party browser extension errors (e.g. MetaMask / Web3 injected wallet errors in sandboxed iframes)
+      (function() {
+        function isExtensionNoise(err, src) {
+          var s = (String(err || '') + ' ' + String(src || '')).toLowerCase();
+          return (
+            s.indexOf('metamask') !== -1 ||
+            s.indexOf('failed to connect to metamask') !== -1 ||
+            s.indexOf('chrome-extension://') !== -1 ||
+            s.indexOf('moz-extension://') !== -1 ||
+            s.indexOf('safari-extension://') !== -1 ||
+            s.indexOf('ethereum') !== -1 ||
+            s.indexOf('web3') !== -1
+          );
+        }
+        window.addEventListener('unhandledrejection', function(event) {
+          var reason = event && event.reason;
+          var msg = reason ? (reason.message || reason.stack || String(reason)) : '';
+          if (isExtensionNoise(msg, '')) {
+            event.preventDefault();
+            if (typeof event.stopImmediatePropagation === 'function') {
+              event.stopImmediatePropagation();
+            }
+          }
+        }, true);
+        window.addEventListener('error', function(event) {
+          var msg = event ? (event.message || '') : '';
+          var filename = event ? (event.filename || '') : '';
+          if (isExtensionNoise(msg, filename)) {
+            event.preventDefault();
+            if (typeof event.stopImmediatePropagation === 'function') {
+              event.stopImmediatePropagation();
+            }
+            return true;
+          }
+        }, true);
+      })();
+    </script>
   </head>
   <body>
     <div id="root"></div>

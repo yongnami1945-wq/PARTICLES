@@ -34,6 +34,7 @@ uniform float uBlackHoleRadius; // Event horizon radius
 // Cinematic Glitch & Distortion (Page 16 Manual Feature)
 uniform float uGlitchIntensity; // 0.0 ~ 2.0 glitch jitter
 uniform float uMotionBlurIntensity; // 0.0 ~ 3.0 kinetic motion blur scale
+uniform float uIsLightBackground;   // 1.0 when background is white / light, 0.0 for dark mode
 
 // Color Mixing Uniforms
 uniform int uColorMixMode;     // 0: Interpolate, 1: Gradient, 2: Velocity, 3: Height, 4: Radial, 5: Additive, 6: Palette
@@ -320,8 +321,24 @@ void main() {
 
   // Gamma correction & glow boost
   mixedColor = pow(max(mixedColor, vec3(0.0)), vec3(uColorGamma));
-  vColor = mixedColor + abs(noiseVec) * (0.2 * noiseMask * uGlowIntensity);
-  vAlpha = 0.8 + 0.2 * (1.0 - noiseMask * 0.3);
+
+  if (uIsLightBackground > 0.5) {
+    // 💡 HIGH CONTRAST LIGHT & TRANSPARENT BACKGROUND INK RENDERING
+    // Adapt particle chromatic tones to ensure deep, vivid readability on white & transparent canvas
+    float colLum = dot(mixedColor, vec3(0.299, 0.587, 0.114));
+    vec3 deepChromatic = mixedColor * 0.85;
+    if (colLum > 0.60) {
+      // De-saturate blinding pastel/white tones into rich, high-contrast cyan/indigo/ruby ink
+      deepChromatic = mix(mixedColor * 0.55, vec3(0.02, 0.25, 0.75), 0.42);
+    }
+    // High kinetic velocity particles get a bold contrast highlight
+    vColor = mix(deepChromatic, vec3(0.04, 0.06, 0.16), clamp(noiseMask * 0.35, 0.0, 0.45));
+    vAlpha = 1.0;
+  } else {
+    // ✨ LUMINOUS GLOWING DARK BACKGROUND RENDERING
+    vColor = mixedColor + abs(noiseVec) * (0.2 * noiseMask * uGlowIntensity);
+    vAlpha = 0.8 + 0.2 * (1.0 - noiseMask * 0.3);
+  }
 
   // 6. Perspective Projection & Multi-Layer Size Scaling
   vec4 mvPosition = modelViewMatrix * vec4(finalPos, 1.0);
@@ -339,11 +356,16 @@ void main() {
   // Kinetic velocity stretching for motion blur look
   float speedStretch = 1.0 + clamp(vSpeed * 0.12 * uMotionBlurIntensity, 0.0, 1.8);
   float pSize = uPointSize * sizeMultiplier * speedStretch * (28.0 / -mvPosition.z);
+  if (uIsLightBackground > 0.5) {
+    // Boost particle point size on white background so tiny dust points are clearly visible
+    pSize *= 1.25;
+  }
   gl_PointSize = clamp(pSize, 1.0, 64.0);
 }
 `;
 
 export const particleFragmentShader = `
+uniform float uIsLightBackground; // 1.0 for white / light background, 0.0 for dark
 uniform float uGlowIntensity;
 uniform float uTime;
 uniform int uParticleType;     // 0~10 existing, 11: Snowflake1, 12: Snowflake2, 13: Snowflake3, 14: Snowflake4, 15: Snowflake5, 16: Multi Snowflake
@@ -603,8 +625,20 @@ void main() {
 
   if (shapeAlpha < 0.01) discard;
 
-  float finalAlpha = vAlpha * shapeAlpha * (1.0 + uGlowIntensity * 0.4);
-  gl_FragColor = vec4(vColor, clamp(finalAlpha, 0.0, 1.0));
+  if (uIsLightBackground > 0.5) {
+    // 💡 HIGH-CONTRAST LIGHT & TRANSPARENT CANVAS INK RENDERING
+    // Create a crisp high-contrast particle with a rich chromatic core and dark outer contour.
+    // This ensures that against a transparent or pure white (#FFFFFF) background, every single particle
+    // and its curl-noise movement / morph trajectories are sharply visible with deep ink definition!
+    float edgeContour = smoothstep(0.5, 0.08, dist);
+    vec3 particleRgb = mix(vColor * 0.22, vColor, edgeContour);
+    float finalAlpha = clamp(shapeAlpha * 1.55, 0.0, 1.0);
+    gl_FragColor = vec4(particleRgb, finalAlpha);
+  } else {
+    // ✨ LUMINOUS GLOWING DARK BACKGROUND RENDERING
+    float finalAlpha = vAlpha * shapeAlpha * (1.0 + uGlowIntensity * 0.4);
+    gl_FragColor = vec4(vColor, clamp(finalAlpha, 0.0, 1.0));
+  }
 }
 `;
 
