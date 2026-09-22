@@ -808,65 +808,99 @@ export function generateQuantumField(
 }
 
 /**
- * 14. ✍️ 2D 고선명도 멀티라인 텍스트 파티클 생성기 (2D Multi-line Typography Generator)
- * - 최대 3줄(3-line) 줄바꿈 텍스트 완벽 지원
- * - 텍스트 피사체 크기 1.7배 대폭 확대 (targetSize = 15.8)
+ * 14. ✍️ 2D 고선명도 텍스트 파티클 생성기 (2D Typography Auto-Centered & Canvas Auto-Fit Generator)
+ * - 텍스트 길이 기준 중심점(가운데 지점)이 캔버스 정중앙(0, 0, 0)에 완벽 일치하도록 정렬
+ * - 텍스트 길이가 아무리 길더라도 카메라 뷰포트(Frustum Safe Bounds) 내에서 자동으로 최적 축소(Auto-Fit)
+ * - 사용자가 줄바꿈을 입력하지 않은 긴 텍스트는 가독성을 위해 2~3줄로 지능적 밸런스 자동 줄바꿈 지원
  * - 가독성과 선명도를 극대화하기 위해 Z=0.0 2D 완전 평면 고밀도 픽셀 매핑
  * - HY태고딕 (한글) 및 Impact/Arial Black (영문 유사 고딕) 적용
  */
 export function generateTextShape(
   text: string,
   count: number,
-  targetSize = 15.8 // 기존 9.2 대비 1.7배 이상 확대
+  _targetSize = 13.5
 ): { positions: Float32Array; colors: Float32Array } {
   const positions = new Float32Array(count * 3);
   const colors = new Float32Array(count * 3);
 
-  // Split into up to 3 lines
-  const rawText = text || 'PARTICLE';
-  const rawLines = rawText.split('\n').map((l) => l.trim()).filter((l) => l.length > 0);
-  const lines = (rawLines.length > 0 ? rawLines : ['PARTICLE']).slice(0, 3);
+  // 1. 텍스트 라인 분석 및 자동 줄바꿈 처리
+  const rawText = (text || 'PARTICLE').trim();
+  let lines: string[] = [];
+
+  if (rawText.includes('\n')) {
+    // 사용자가 직접 줄바꿈한 경우
+    lines = rawText.split('\n').map((l) => l.trim()).filter((l) => l.length > 0).slice(0, 4);
+  } else if (rawText.length > 10) {
+    // 텍스트가 긴 경우 (10자 초과): 공백 단어 기준 또는 글자 수 기준으로 2~3줄 자동 분할
+    const words = rawText.split(' ').filter(Boolean);
+    if (words.length >= 2) {
+      if (words.length <= 4) {
+        const mid = Math.ceil(words.length / 2);
+        lines = [words.slice(0, mid).join(' '), words.slice(mid).join(' ')];
+      } else {
+        const third = Math.ceil(words.length / 3);
+        lines = [
+          words.slice(0, third).join(' '),
+          words.slice(third, third * 2).join(' '),
+          words.slice(third * 2).join(' '),
+        ].filter(Boolean);
+      }
+    } else {
+      // 공백 없는 긴 단어의 경우 균등 분할
+      if (rawText.length > 18) {
+        const chunk = Math.ceil(rawText.length / 3);
+        lines = [rawText.slice(0, chunk), rawText.slice(chunk, chunk * 2), rawText.slice(chunk * 2)];
+      } else {
+        const chunk = Math.ceil(rawText.length / 2);
+        lines = [rawText.slice(0, chunk), rawText.slice(chunk)];
+      }
+    }
+  } else {
+    lines = [rawText];
+  }
+
+  if (lines.length === 0) lines = ['PARTICLE'];
   const lineCount = lines.length;
 
-  const canvas = document.createElement('canvas');
-  
-  // Find longest line character count
+  // 가장 긴 라인의 글자 수 탐색
   let maxChars = 1;
   lines.forEach((l) => {
     if (l.length > maxChars) maxChars = l.length;
   });
 
-  // Dynamic canvas dimension based on multi-line text layout
-  canvas.width = Math.min(2600, Math.max(1400, maxChars * 240));
-  canvas.height = Math.max(700, lineCount * 320 + 200);
+  // 고해상도 Canvas2D 생성
+  const canvas = document.createElement('canvas');
+  canvas.width = Math.min(3200, Math.max(1600, maxChars * 220));
+  canvas.height = Math.max(800, lineCount * 300 + 240);
   const ctx = canvas.getContext('2d');
 
   if (!ctx) {
     return generateSphere(count);
   }
 
-  // Clear black background
+  // 완전 블랙 배경 클리어
   ctx.fillStyle = '#000000';
   ctx.fillRect(0, 0, canvas.width, canvas.height);
 
-  // Dynamic font sizing for HY TaeGothic & Heavy Gothic (optimizing for 1 to 3 lines)
+  // 동적 폰트 크기 계산
   const calculatedFontByWidth = Math.floor((canvas.width * 0.88) / Math.max(maxChars, 2.5));
-  const calculatedFontByHeight = Math.floor((canvas.height * 0.75) / (lineCount * 1.35));
-  const fontSize = Math.min(260, Math.max(90, Math.min(calculatedFontByWidth, calculatedFontByHeight)));
+  const calculatedFontByHeight = Math.floor((canvas.height * 0.72) / (lineCount * 1.35));
+  const fontSize = Math.min(260, Math.max(80, Math.min(calculatedFontByWidth, calculatedFontByHeight)));
 
   ctx.font = `900 ${fontSize}px "HYGothic-Extra", "HYTaegothic", "HYGothic", "Impact", "Arial Black", "NanumSquareNeo-Heavy", "Black Han Sans", "Noto Sans KR", "Malgun Gothic", sans-serif`;
   ctx.textAlign = 'center';
   ctx.textBaseline = 'middle';
 
-  ctx.lineWidth = Math.max(10, Math.floor(fontSize * 0.09));
+  ctx.lineWidth = Math.max(8, Math.floor(fontSize * 0.08));
   ctx.strokeStyle = '#ffffff';
   ctx.fillStyle = '#ffffff';
 
-  // Render each line with proper line spacing
-  const lineHeight = fontSize * 1.3;
+  // 텍스트 블록의 수직 정중앙 시작점 계산
+  const lineHeight = fontSize * 1.28;
   const totalBlockHeight = (lineCount - 1) * lineHeight;
   const startY = canvas.height / 2 - totalBlockHeight / 2;
 
+  // 각 줄 렌더링 (가로 중앙 기준)
   lines.forEach((line, idx) => {
     const lineY = startY + idx * lineHeight;
     ctx.strokeText(line, canvas.width / 2, lineY);
@@ -874,17 +908,20 @@ export function generateTextShape(
   });
 
   const imgData = ctx.getImageData(0, 0, canvas.width, canvas.height);
-  
-  // Bounding box detection to tightly center & scale the 2D text
-  let minX = canvas.width, maxX = 0, minY = canvas.height, maxY = 0;
+
+  // 실제 그려진 텍스트 픽셀의 타이트한 바운딩 박스(Bounding Box) 추출
+  let minX = canvas.width;
+  let maxX = 0;
+  let minY = canvas.height;
+  let maxY = 0;
   const validPixels: [number, number, number][] = []; // [x, y, luminance]
 
-  const step = canvas.width > 1600 ? 2 : 1;
+  const step = canvas.width > 2000 ? 2 : 1;
   for (let y = 0; y < canvas.height; y += step) {
     for (let x = 0; x < canvas.width; x += step) {
       const idx = (y * canvas.width + x) * 4;
       const lum = imgData.data[idx];
-      if (lum > 50) {
+      if (lum > 45) {
         validPixels.push([x, y, lum]);
         if (x < minX) minX = x;
         if (x > maxX) maxX = x;
@@ -898,18 +935,34 @@ export function generateTextShape(
     return generateSphere(count);
   }
 
+  // 텍스트의 실제 픽셀 너비/높이 및 정확한 기하학적 중심점 계산
   const textWidth = Math.max(1, maxX - minX);
   const textHeight = Math.max(1, maxY - minY);
-  const textCenterX = (minX + maxX) / 2;
-  const textCenterY = (minY + maxY) / 2;
+  const textCenterX = (minX + maxX) * 0.5;
+  const textCenterY = (minY + maxY) * 0.5;
 
-  // 1.7x enlarged auto-fit 2D layout aspect ratio
-  const scale = targetSize / Math.max(textWidth / 1.75, textHeight);
+  // 캔버스 카메라 화각(Camera FOV 60°, Z=15) 기준 안전 가두리 영역 (Frustum Safe Limits)
+  // 텍스트 길이가 아무리 길더라도 캔버스 밖으로 벗어나지 않도록 자동 스케일링 (Auto-Fit)
+  const SAFE_MAX_WORLD_WIDTH = 13.5;  // 캔버스 가로 안전 가두리 (좌우 여백 확보)
+  const SAFE_MAX_WORLD_HEIGHT = 8.2;  // 캔버스 세로 안전 가두리 (상하 툴바/도크 여백 확보)
+
+  const scaleW = SAFE_MAX_WORLD_WIDTH / textWidth;
+  const scaleH = SAFE_MAX_WORLD_HEIGHT / textHeight;
+  
+  // 짧은 단어(예: 'AI')의 경우 글자가 과도하게 거대해지는 것을 방지하는 최대 높이 상한
+  const maxSingleFontHeight = 4.2;
+  const scaleMax = maxSingleFontHeight / Math.max(fontSize, 40);
+
+  // 가로와 세로 가두리 중 더 타이트한 비율을 취하여 완벽한 비율 유지 및 캔버스 100% 안착 보장
+  const scale = Math.min(scaleW, scaleH, scaleMax);
 
   for (let i = 0; i < count; i++) {
     const pixel = validPixels[Math.floor(Math.random() * validPixels.length)];
-    
-    // Exact 2D Screen-Aligned Coordinates (Z is locked to 0.0 for 100% 2D Sharpness)
+
+    // 텍스트의 가운데 지점(textCenterX, textCenterY)을 원점(0, 0, 0)으로 정렬
+    // (minX - textCenterX) * scale = -0.5 * textWidth * scale
+    // (maxX - textCenterX) * scale = +0.5 * textWidth * scale
+    // 즉, 캔버스 좌우 대칭 및 정중앙에 완벽히 위치함
     const normX = (pixel[0] - textCenterX) * scale;
     const normY = -(pixel[1] - textCenterY) * scale;
     const normZ = 0.0; // 2D 완전 평면
@@ -918,18 +971,18 @@ export function generateTextShape(
     positions[i * 3 + 1] = normY;
     positions[i * 3 + 2] = normZ;
 
-    // High-Clarity 2D Neon Typography Palette (Vibrant Electric Cyan to Pure Laser White/Amber)
+    // 네온 타이포그래피 팔레트 (Electric Cyan ~ Pure Laser White / Vivid Amber)
     const t = Math.min(1, Math.max(0, (pixel[0] - minX) / textWidth));
     const lineRatio = Math.min(1, Math.max(0, (pixel[1] - minY) / textHeight));
     const lumRatio = pixel[2] / 255;
-    
+
     if (lumRatio > 0.85) {
-      // Crisp Bright Core (White / High-Luminance Cyan)
+      // 밝은 코어 광선 (White / High-Luminance Cyan)
       colors[i * 3 + 0] = 0.5 + 0.5 * Math.sin(t * Math.PI);
       colors[i * 3 + 1] = 0.98;
       colors[i * 3 + 2] = 1.0;
     } else {
-      // Solid Font Body with vertical multi-line gradient contrast
+      // 폰트 외곽 본체 그라데이션
       colors[i * 3 + 0] = 0.05 + 0.9 * t;
       colors[i * 3 + 1] = 0.85 + 0.15 * Math.sin((t + lineRatio * 0.5) * Math.PI * 2);
       colors[i * 3 + 2] = 1.0 - 0.35 * t;

@@ -365,7 +365,7 @@ export const ControlPanel: React.FC<ControlPanelProps> = ({
                   <span>✍️ 2D 멀티라인 텍스트 (최대 3줄)</span>
                 </span>
                 <span className="text-[8px] bg-[#00F0FF]/15 text-[#00F0FF] px-1 py-0.5 border border-[#00F0FF]/30">
-                  1.7배 대형 2D 평면
+                  정중앙 정렬 · 캔버스 자동 맞춤
                 </span>
               </div>
               <div className="space-y-2">
@@ -381,7 +381,7 @@ export const ControlPanel: React.FC<ControlPanelProps> = ({
                       setSideTextInput(splitLines.slice(0, 3).join('\n'));
                     }
                   }}
-                  placeholder={`1줄: 3D PARTICLE\n2줄: HY태고딕 고선명도\n3줄: 3-LINE TYPO`}
+                  placeholder={`1줄: 3D PARTICLE\n2줄: HY태고딕 고선명도\n3줄: 캔버스 정중앙 자동맞춤`}
                   className="w-full bg-[#0A0A0C] border border-[#2A2A2E] focus:border-[#00F0FF] px-2.5 py-1.5 text-xs text-white outline-none font-bold resize-none leading-relaxed custom-scrollbar"
                 />
                 <div className="grid grid-cols-3 gap-1">

@@ -308,7 +308,7 @@ export default function App() {
   const [isPythonModalOpen, setIsPythonModalOpen] = useState<boolean>(false);
   const [isWasmModalOpen, setIsWasmModalOpen] = useState<boolean>(false);
   const [isTheoryModalOpen, setIsTheoryModalOpen] = useState<boolean>(false);
-  const [theoryModalPage, setTheoryModalPage] = useState<number>(13);
+  const [theoryModalPage, setTheoryModalPage] = useState<number>(1);
   const [isColorMixerOpen, setIsColorMixerOpen] = useState<boolean>(false);
   const [isGCodeModalOpen, setIsGCodeModalOpen] = useState<boolean>(false);
   const [isVideoModalOpen, setIsVideoModalOpen] = useState<boolean>(false);
@@ -426,7 +426,7 @@ export default function App() {
     return () => clearTimeout(timer);
   }, [config, sourceShapeId, targetShapeId, waypointShapeIds, shapes]);
 
-  const handleOpenTheoryPage = useCallback((page: number = 13) => {
+  const handleOpenTheoryPage = useCallback((page: number = 1) => {
     setTheoryModalPage(page);
     setIsTheoryModalOpen(true);
   }, []);
@@ -496,7 +496,7 @@ export default function App() {
         type: 'text',
         positions: data.positions,
         colors: data.colors,
-        description: `2D 고선명도 텍스트 파티클 (${titleLines.length}줄 - HY태고딕)`,
+        description: `2D 고선명도 텍스트 파티클 (길이 기준 캔버스 정중앙 정렬 & 화각 내 자동 맞춤 - HY태고딕)`,
       };
 
       setShapes((prev) => [newShape, ...prev]);

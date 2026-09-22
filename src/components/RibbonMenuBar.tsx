@@ -543,12 +543,12 @@ export const RibbonMenuBar: React.FC<RibbonMenuBarProps> = ({
 
           {/* Quick Manual button */}
           <button
-            onClick={() => onOpenTheoryModal(13)}
+            onClick={() => onOpenTheoryModal(1)}
             className="hidden sm:flex items-center gap-1 px-2.5 py-1 bg-[#141418] hover:bg-[#1F1F26] border border-[#2A2A2E] hover:border-[#00F0FF] text-[10px] text-gray-300 hover:text-[#00F0FF] transition cursor-pointer font-bold"
-            title="3D 파티클 몰핑 공식 사용설명서 (16P)"
+            title="3D 파티클 몰핑 공식 사용설명서 (19P)"
           >
             <BookOpen className="w-3 h-3 text-[#00F0FF]" />
-            <span>사용설명서</span>
+            <span>사용설명서 (19P)</span>
           </button>
 
           {/* Unified Sidebar Toggle Button */}
@@ -657,12 +657,12 @@ export const RibbonMenuBar: React.FC<RibbonMenuBarProps> = ({
 
         {/* Quick Theory / Manual direct button */}
         <button
-          onClick={() => onOpenTheoryModal(13)}
+          onClick={() => onOpenTheoryModal(1)}
           className="hidden md:flex items-center gap-1.5 px-2.5 py-1 text-[10px] text-gray-400 hover:text-[#00F0FF] transition cursor-pointer"
-          title="3D 파티클 몰핑 공식 사용설명서 (16P)"
+          title="3D 파티클 몰핑 공식 사용설명서 (19P)"
         >
           <BookOpen className="w-3 h-3 text-[#00F0FF]" />
-          <span>사용설명서 (16P)</span>
+          <span>사용설명서 (19P)</span>
         </button>
       </div>
 
@@ -706,11 +706,11 @@ export const RibbonMenuBar: React.FC<RibbonMenuBarProps> = ({
                         <div className="text-xs font-bold text-[#00F0FF] uppercase tracking-wider flex items-center gap-2 flex-wrap">
                           <span>✍️ 2D 멀티라인 텍스트 파티클 직접 로딩</span>
                           <span className="text-[9px] px-1.5 py-0.5 bg-[#00F0FF]/15 text-[#00F0FF] border border-[#00F0FF]/30 font-normal">
-                            최대 3줄 (3-Line) 지원 · 1.7배 대형 스케일 · HY태고딕
+                            길이 기준 캔버스 정중앙 자동 정렬 · 긴 텍스트 화각 자동 맞춤(Auto-Fit) · HY태고딕
                           </span>
                         </div>
                         <div className="text-[10px] text-gray-400 mt-0.5">
-                          최대 3줄까지 자유롭게 줄바꿈(Enter)하여 입력할 수 있으며, 1.7배 확대된 2D 고선명도 평면으로 즉시 배치됩니다.
+                          텍스트들의 길이를 기준으로 중심점이 캔버스 정중앙(0,0,0)에 일치하며, 텍스트가 아무리 길어도 캔버스 화면 내에 자동으로 최적 스케일링됩니다. (Ctrl+Enter 로딩)
                         </div>
                       </div>
                     </div>
@@ -2131,13 +2131,13 @@ export const RibbonMenuBar: React.FC<RibbonMenuBarProps> = ({
                   <div className="grid grid-cols-1 gap-1.5">
                     <button
                       onClick={() => {
-                        onOpenTheoryModal(13);
+                        onOpenTheoryModal(1);
                         setActiveRibbon(null);
                       }}
                       className="p-2 bg-[#00F0FF]/15 hover:bg-[#00F0FF] hover:text-black border border-[#00F0FF] text-[#00F0FF] font-bold text-[10px] uppercase flex items-center gap-2 transition cursor-pointer"
                     >
                       <BookOpen className="w-3.5 h-3.5" />
-                      <span>공식 사용설명서 (16P 신기능 포함)</span>
+                      <span>공식 사용설명서 (19P 기능별 조작·효과 완벽 총람)</span>
                     </button>
 
                     <button
